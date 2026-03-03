@@ -8,7 +8,8 @@ $ErrorActionPreference = 'Stop'
 
 $Dest = if ($env:MDEDIT_DIR) { $env:MDEDIT_DIR } else { "$env:USERPROFILE\mdedit" }
 $Venv = "$Dest\.venv"
-$BinDir = "$env:LOCALAPPDATA\Programs\mdedit"
+# WindowsApps is always in PATH - no PATH manipulation needed
+$BinDir = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
 
 # Already installed? Still repair launcher in case it is missing.
 $alreadyInstalled = Test-Path "$Dest\.git"
@@ -53,7 +54,7 @@ if (-not $alreadyInstalled) {
     & "$Venv\Scripts\pip.exe" install -q -r "$Dest\requirements.txt"
 }
 
-# Launchers
+# Launchers in WindowsApps (always on PATH, no registry changes needed)
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 
 # mdedit.bat for CMD / PowerShell
@@ -65,21 +66,11 @@ $updateBatLines = '@echo off', "powershell -ExecutionPolicy Bypass -File `"$Dest
 [System.IO.File]::WriteAllLines("$BinDir\mdedit-update.bat", $updateBatLines, [System.Text.Encoding]::ASCII)
 
 # shell scripts for Git Bash (LF line endings, no extension)
-$shLines = '#!/usr/bin/env bash', "exec `"$($Venv.Replace('\','/') )/Scripts/python.exe`" `"$($Dest.Replace('\','/'))/mdedit.py`" `"`$@`""
+$shLines = '#!/usr/bin/env bash', "exec `"$($Venv.Replace('\','/'))/Scripts/python.exe`" `"$($Dest.Replace('\','/'))/mdedit.py`" `"`$@`""
 [System.IO.File]::WriteAllLines("$BinDir\mdedit", $shLines, (New-Object System.Text.UTF8Encoding $false))
 $shUpdateLines = '#!/usr/bin/env bash', "exec bash `"$($Dest.Replace('\','/'))/update.sh`""
 [System.IO.File]::WriteAllLines("$BinDir\mdedit-update", $shUpdateLines, (New-Object System.Text.UTF8Encoding $false))
 
 Write-Host "Launcher: $BinDir\mdedit.bat"
-
-# Add BinDir to user PATH if not already present
-$userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
-if ($userPath -notlike "*$BinDir*") {
-    [Environment]::SetEnvironmentVariable('PATH', "$BinDir;$userPath", 'User')
-}
-
-# Refresh PATH in the current session immediately
-$env:PATH = "$BinDir;" + $env:PATH
-
 Write-Host ""
 Write-Host "Done. Run: mdedit [file.md]"
