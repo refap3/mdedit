@@ -36,20 +36,34 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 **One-line install** (clones repo, creates venv, installs deps, adds `mdedit` command):
 
+macOS / Linux:
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/refap3/mdedit/main/install.sh)
 ```
 
+Windows (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/refap3/mdedit/main/install.ps1 | iex
+```
+
+> **Windows:** open a new terminal after install for `mdedit` to be on PATH.
+
 Then run:
 
-```bash
+```
 mdedit [file.md]
 ```
 
 **Update to latest version:**
 
+macOS / Linux:
 ```bash
 bash ~/mdedit/update.sh
+```
+
+Windows (PowerShell):
+```powershell
+& "$env:USERPROFILE\mdedit\update.ps1"
 ```
 
 **Manual install:**
@@ -110,8 +124,10 @@ mdedit/
 ├── mdedit.py          # Main application (single file)
 ├── mdedit.spec        # PyInstaller bundle config
 ├── build.sh           # Mac .app + .dmg build script
-├── install.sh         # One-line installer
-├── update.sh          # Updater
+├── install.sh         # One-line installer (macOS/Linux)
+├── install.ps1        # One-line installer (Windows)
+├── update.sh          # Updater (macOS/Linux)
+├── update.ps1         # Updater (Windows)
 └── requirements.txt   # Python dependencies
 ```
 
