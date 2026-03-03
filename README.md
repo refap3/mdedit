@@ -56,14 +56,8 @@ mdedit [file.md]
 
 **Update to latest version:**
 
-macOS / Linux:
-```bash
-bash ~/mdedit/update.sh
 ```
-
-Windows (PowerShell):
-```powershell
-& "$env:USERPROFILE\mdedit\update.ps1"
+mdedit-update
 ```
 
 **Manual install:**

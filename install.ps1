@@ -56,13 +56,19 @@ if (-not $alreadyInstalled) {
 # Launchers
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 
-# .bat for CMD / PowerShell
+# mdedit.bat for CMD / PowerShell
 $batLines = '@echo off', "`"$Venv\Scripts\python.exe`" `"$Dest\mdedit.py`" %*"
 [System.IO.File]::WriteAllLines("$BinDir\mdedit.bat", $batLines, [System.Text.Encoding]::ASCII)
 
-# shell script for Git Bash (LF line endings, no extension)
+# mdedit-update.bat for CMD / PowerShell
+$updateBatLines = '@echo off', "powershell -ExecutionPolicy Bypass -File `"$Dest\update.ps1`""
+[System.IO.File]::WriteAllLines("$BinDir\mdedit-update.bat", $updateBatLines, [System.Text.Encoding]::ASCII)
+
+# shell scripts for Git Bash (LF line endings, no extension)
 $shLines = '#!/usr/bin/env bash', "exec `"$($Venv.Replace('\','/') )/Scripts/python.exe`" `"$($Dest.Replace('\','/'))/mdedit.py`" `"`$@`""
 [System.IO.File]::WriteAllLines("$BinDir\mdedit", $shLines, (New-Object System.Text.UTF8Encoding $false))
+$shUpdateLines = '#!/usr/bin/env bash', "exec bash `"$($Dest.Replace('\','/'))/update.sh`""
+[System.IO.File]::WriteAllLines("$BinDir\mdedit-update", $shUpdateLines, (New-Object System.Text.UTF8Encoding $false))
 
 Write-Host "Launcher: $BinDir\mdedit.bat"
 
