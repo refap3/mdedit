@@ -383,75 +383,36 @@ class FindReplaceDialog(QDialog):
 # ---------------------------------------------------------------------------
 
 HELP_MD = """\
-# Markdown Quick Reference
+# Markdown Reference
 
-## Headings
-```
-# H1   ## H2   ### H3   #### H4   ##### H5   ###### H6
-```
+| Element | Syntax |
+|---|---|
+| H1 … H6 | `# H1` `## H2` `### H3` |
+| **Bold** | `**text**` or `__text__` |
+| *Italic* | `*text*` or `_text_` |
+| ***Bold italic*** | `***text***` |
+| ~~Strikethrough~~ | `~~text~~` |
+| `Inline code` | `` `code` `` |
+| Blockquote | `> text` |
+| Horizontal rule | `---` |
+| Link | `[label](url)` |
+| Image | `![alt](url)` |
+| Unordered list | `- item` or `* item` |
+| Ordered list | `1. item` |
+| Task list | `- [x] done` `- [ ] todo` |
 
-## Emphasis
-| Syntax | Result |
-|--------|--------|
-| `**bold**` or `__bold__` | **bold** |
-| `*italic*` or `_italic_` | *italic* |
-| `***bold italic***` | ***bold italic*** |
-| `~~strikethrough~~` | ~~strikethrough~~ |
+## Code block
+````
+```bash
+echo "hello"
+```
+````
 
-## Lists
+## Table
 ```
-- Unordered item       1. Ordered item
-- Another item         2. Another item
-  - Nested               - Nested unordered
-```
-
-## Links & Images
-```
-[Link text](https://example.com)
-![Alt text](image.png)
-[Link with title](https://example.com "Title")
-```
-
-## Code
-```
-`inline code`
-
-\`\`\`python
-def hello():
-    print("Hello, world!")
-\`\`\`
-```
-
-## Blockquotes
-```
-> This is a blockquote.
-> It can span multiple lines.
-```
-
-## Tables
-```
-| Column 1 | Column 2 | Column 3 |
-|----------|----------|----------|
-| Cell 1   | Cell 2   | Cell 3   |
-| Cell 4   | Cell 5   | Cell 6   |
-```
-
-## Horizontal Rule
-```
----   or   ***   or   ___
-```
-
-## Task Lists
-```
-- [x] Completed task
-- [ ] Incomplete task
-```
-
-## Footnotes
-```
-Text with a footnote[^1].
-
-[^1]: The footnote content.
+| Col 1 | Col 2 |
+|-------|-------|
+| A     | B     |
 ```
 """
 
@@ -669,9 +630,21 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         for label, slot in [
-            ("B", lambda: self._wrap_selection("**", "**")),
-            ("I", lambda: self._wrap_selection("*", "*")),
+            ("B",   lambda: self._wrap_selection("**", "**")),
+            ("I",   lambda: self._wrap_selection("*", "*")),
             ("` `", lambda: self._wrap_selection("`", "`")),
+        ]:
+            act = QAction(label, self)
+            act.triggered.connect(slot)
+            tb.addAction(act)
+
+        tb.addSeparator()
+
+        for label, slot in [
+            ("bash",  self._insert_bash_block),
+            ("tbl",   self._insert_table),
+            ("1.",    self._insert_numbered_list),
+            ("-",     self._insert_bullet_list),
         ]:
             act = QAction(label, self)
             act.triggered.connect(slot)
@@ -996,6 +969,19 @@ class MainWindow(QMainWindow):
         cursor = self.editor.textCursor()
         sel = cursor.selectedText() if cursor.hasSelection() else "alt text"
         cursor.insertText(f"![{sel}](image.png)")
+
+    def _insert_bash_block(self):
+        cursor = self.editor.textCursor()
+        sel = cursor.selectedText() if cursor.hasSelection() else "# command"
+        cursor.insertText(f"\n```bash\n{sel}\n```\n")
+
+    def _insert_bullet_list(self):
+        cursor = self.editor.textCursor()
+        cursor.insertText("\n- item\n- item\n- item\n")
+
+    def _insert_numbered_list(self):
+        cursor = self.editor.textCursor()
+        cursor.insertText("\n1. item\n2. item\n3. item\n")
 
     def _insert_table(self):
         table = (
