@@ -454,6 +454,61 @@ class HelpDialog(QDialog):
 
 
 # ---------------------------------------------------------------------------
+# Keyboard Shortcuts Dialog
+# ---------------------------------------------------------------------------
+
+SHORTCUTS = [
+    ("File",        "New",                  "Ctrl+N"),
+    ("File",        "Open",                 "Ctrl+O"),
+    ("File",        "Save",                 "Ctrl+S"),
+    ("File",        "Save As",              "Ctrl+Shift+S"),
+    ("File",        "Quit",                 "Ctrl+Q"),
+    ("Edit",        "Undo",                 "Ctrl+Z"),
+    ("Edit",        "Redo",                 "Ctrl+Y"),
+    ("Edit",        "Cut",                  "Ctrl+X"),
+    ("Edit",        "Copy",                 "Ctrl+C"),
+    ("Edit",        "Paste",                "Ctrl+V"),
+    ("Edit",        "Select All",           "Ctrl+A"),
+    ("Edit",        "Find & Replace",       "Ctrl+F"),
+    ("View",        "Toggle Preview",       "Ctrl+Shift+P"),
+    ("View",        "Zoom In",              "Ctrl+Shift+Up"),
+    ("View",        "Zoom Out",             "Ctrl+Shift+Down"),
+    ("View",        "Reset Zoom",           "Ctrl+0"),
+    ("Format",      "Bold",                 "Ctrl+Shift+B"),
+    ("Format",      "Italic",               "Ctrl+Shift+I"),
+    ("Help",        "Markdown Reference",   "F1"),
+    ("Help",        "Keyboard Shortcuts",   "F2"),
+]
+
+
+class ShortcutsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Keyboard Shortcuts")
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+        self.resize(380, 480)
+
+        layout = QVBoxLayout(self)
+
+        text = QTextEdit()
+        text.setReadOnly(True)
+        text.setFont(QFont("Menlo" if sys.platform == "darwin" else "Consolas", 12))
+
+        rows = "\n".join(
+            f"  {menu:<10} {action:<22} {keys}"
+            for menu, action, keys in SHORTCUTS
+        )
+        text.setPlainText(f"{'Menu':<12} {'Action':<22} Shortcut\n"
+                          f"{'-'*52}\n"
+                          f"{rows}")
+        layout.addWidget(text)
+
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.close)
+        layout.addWidget(btn)
+
+
+# ---------------------------------------------------------------------------
 # Main Window
 # ---------------------------------------------------------------------------
 
@@ -601,7 +656,10 @@ class MainWindow(QMainWindow):
 
         # ---- Help ----
         help_menu = mb.addMenu("&Help")
-        self._add_action(help_menu, "Markdown &Reference", self.action_help)
+        self._add_action(help_menu, "Markdown &Reference", self.action_help,
+                         QKeySequence("F1"))
+        self._add_action(help_menu, "&Keyboard Shortcuts", self.action_shortcuts,
+                         QKeySequence("F2"))
         help_menu.addSeparator()
         self._add_action(help_menu, "&About", self.action_about)
 
@@ -622,6 +680,17 @@ class MainWindow(QMainWindow):
             ("New", self.action_new),
             ("Open", self.action_open),
             ("Save", self.action_save),
+        ]:
+            act = QAction(label, self)
+            act.triggered.connect(slot)
+            tb.addAction(act)
+
+        tb.addSeparator()
+
+        for label, slot in [
+            ("H1",  lambda: self._insert_heading(1)),
+            ("H2",  lambda: self._insert_heading(2)),
+            ("H3",  lambda: self._insert_heading(3)),
         ]:
             act = QAction(label, self)
             act.triggered.connect(slot)
@@ -972,7 +1041,7 @@ class MainWindow(QMainWindow):
 
     def _insert_bash_block(self):
         cursor = self.editor.textCursor()
-        sel = cursor.selectedText() if cursor.hasSelection() else "# command"
+        sel = cursor.selectedText() if cursor.hasSelection() else 'echo "hello"'
         cursor.insertText(f"\n```bash\n{sel}\n```\n")
 
     def _insert_bullet_list(self):
@@ -983,12 +1052,22 @@ class MainWindow(QMainWindow):
         cursor = self.editor.textCursor()
         cursor.insertText("\n1. item\n2. item\n3. item\n")
 
+    def _insert_heading(self, level: int):
+        prefix = "#" * level + " "
+        cursor = self.editor.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock,
+                            QTextCursor.MoveMode.KeepAnchor)
+        line = cursor.selectedText()
+        # Strip any existing heading prefix then apply the new one
+        stripped = re.sub(r"^#{1,6}\s*", "", line)
+        cursor.insertText(f"{prefix}{stripped}")
+
     def _insert_table(self):
         table = (
-            "\n| Column 1 | Column 2 | Column 3 |\n"
-            "|----------|----------|----------|\n"
-            "| Cell     | Cell     | Cell     |\n"
-            "| Cell     | Cell     | Cell     |\n"
+            "\n| Col 1 | Col 2 |\n"
+            "|-------|-------|\n"
+            "| A     | B     |\n"
         )
         self.editor.textCursor().insertText(table)
 
@@ -1003,6 +1082,10 @@ class MainWindow(QMainWindow):
 
     def action_help(self):
         dlg = HelpDialog(self)
+        dlg.exec()
+
+    def action_shortcuts(self):
+        dlg = ShortcutsDialog(self)
         dlg.exec()
 
     def action_about(self):
