@@ -89,6 +89,20 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 Produces `dist/MDEdit.app` and `dist/MDEdit.dmg`.
 `pyinstaller` is installed automatically into `.venv` if not present.
 
+## Cleanup
+
+After a build, these folders can be safely deleted:
+
+```bash
+rm -rf build/ dist/ __pycache__/
+```
+
+To also remove the virtual environment (~300 MB):
+
+```bash
+rm -rf build/ dist/ __pycache__/ .venv/
+```
+
 ## Project Structure
 
 ```
