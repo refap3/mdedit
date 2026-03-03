@@ -34,11 +34,31 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 ## Installation
 
+**One-line install** (clones repo, creates venv, installs deps, adds `mdedit` command):
+
 ```bash
-git clone https://github.com/rainers/mdedit.git
+bash <(curl -fsSL https://raw.githubusercontent.com/refap3/mdedit/main/install.sh)
+```
+
+Then run:
+
+```bash
+mdedit [file.md]
+```
+
+**Update to latest version:**
+
+```bash
+bash ~/mdedit/update.sh
+```
+
+**Manual install:**
+
+```bash
+git clone https://github.com/refap3/mdedit.git
 cd mdedit
-pip install -r requirements.txt
-python3 mdedit.py
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python mdedit.py
 ```
 
 ## Keyboard Shortcuts
@@ -63,11 +83,11 @@ python3 mdedit.py
 ## Building a Mac .app + .dmg
 
 ```bash
-python3 build.py
+./build.sh
 ```
 
-Produces `dist/MDEdit.app` and `dist/MDEdit-1.0.0.dmg`.
-Requires `pyinstaller` (installed automatically by the script).
+Produces `dist/MDEdit.app` and `dist/MDEdit.dmg`.
+`pyinstaller` is installed automatically into `.venv` if not present.
 
 ## Project Structure
 
@@ -75,7 +95,9 @@ Requires `pyinstaller` (installed automatically by the script).
 mdedit/
 ├── mdedit.py          # Main application (single file)
 ├── mdedit.spec        # PyInstaller bundle config
-├── build.py           # Mac .app + .dmg build script
+├── build.sh           # Mac .app + .dmg build script
+├── install.sh         # One-line installer
+├── update.sh          # Updater
 └── requirements.txt   # Python dependencies
 ```
 
