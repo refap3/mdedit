@@ -54,6 +54,15 @@ if (-not $alreadyInstalled) {
     & "$Venv\Scripts\pip.exe" install -q -r "$Dest\requirements.txt"
 }
 
+# Remove old launcher dir if present from a previous install
+$oldBinDir = "$env:LOCALAPPDATA\Programs\mdedit"
+if (Test-Path $oldBinDir) {
+    Remove-Item -Recurse -Force $oldBinDir
+    $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+    $cleaned = ($userPath -split ';' | Where-Object { $_ -ne $oldBinDir }) -join ';'
+    [Environment]::SetEnvironmentVariable('PATH', $cleaned, 'User')
+}
+
 # Launchers in WindowsApps (always on PATH, no registry changes needed)
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 
