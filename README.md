@@ -60,6 +60,14 @@ mdedit [file.md]
 mdedit-update
 ```
 
+**Complete wipe (if install or update is broken):**
+
+```bash
+rm -rf ~/mdedit ~/.local/bin/mdedit ~/.local/bin/mdedit-update
+```
+
+Then re-run the one-line installer above.
+
 **Manual install:**
 
 ```bash
