@@ -17,12 +17,12 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QAction, QColor, QFont, QKeySequence, QPalette,
-    QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
+    QShortcut, QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
 )
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QHBoxLayout,
     QLabel, QLineEdit, QMainWindow, QCheckBox,
-    QMessageBox, QPushButton, QShortcut, QSplitter, QStatusBar,
+    QMessageBox, QPushButton, QSplitter, QStatusBar,
     QTextEdit, QVBoxLayout, QWidget, QScrollArea,
     QDialogButtonBox,
 )
