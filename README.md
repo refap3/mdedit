@@ -38,7 +38,7 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 macOS / Linux:
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/refap3/mdedit/main/install.sh)
+curl -fsSL https://raw.githubusercontent.com/refap3/mdedit/main/install.sh | bash
 ```
 
 Windows (PowerShell):
