@@ -10,12 +10,12 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 - **Side-by-side live preview** — rendered HTML updates as you type (300 ms debounce)
 - **GitHub-style CSS** — clean preview with dark/light mode support
-- **Syntax highlighting** in the editor — headings, bold, italic, code, links, lists
-- **File operations** — New, Open, Save, Save As, Export HTML, Open Recent (last 10 files)
-- **Find & Replace** — with case-sensitive and whole-word options
-- **Format helpers** — Bold, Italic, Inline Code, Code Block, Link, Image, Table, HR
+- **Syntax highlighting** in the editor — headings, bold, italic, strikethrough, code, links, lists
+- **File operations** — New, Open, Save, Save As, Export HTML, Open Recent (last 10 files, shortened paths)
+- **Find & Replace** — case-sensitive and whole-word options, live match count, highlighted current match
+- **Format helpers** — Bold, Italic, Inline Code, Code Block, Link, Image, Table, HR (re-applying a format toggles it off)
 - **Markdown extensions** — tables, fenced code blocks, TOC, syntax-highlighted code (Pygments)
-- **Persistent state** — window size, splitter position, dark mode, recent files
+- **Persistent state** — window size, splitter position, dark mode, preview visibility, word wrap, recent files
 - **Command-line** — open a file directly: `python3 mdedit.py file.md`
 
 ## Screenshots
