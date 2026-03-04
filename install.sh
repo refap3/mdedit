@@ -27,14 +27,20 @@ echo "Installing dependencies ..."
 "$VENV/bin/pip" install -q --upgrade pip
 "$VENV/bin/pip" install -q -r "$DEST/requirements.txt"
 
-# Launcher script
+# Launcher scripts
 mkdir -p "$BIN"
 cat > "$BIN/mdedit" <<EOF
 #!/usr/bin/env bash
 exec "$VENV/bin/python" "$DEST/mdedit.py" "\$@"
 EOF
 chmod +x "$BIN/mdedit"
-echo "Launcher: $BIN/mdedit"
+
+cat > "$BIN/mdedit-update" <<EOF
+#!/usr/bin/env bash
+exec bash "$DEST/update.sh"
+EOF
+chmod +x "$BIN/mdedit-update"
+echo "Launchers: $BIN/mdedit, $BIN/mdedit-update"
 
 # PATH hint if needed
 case ":${PATH}:" in
