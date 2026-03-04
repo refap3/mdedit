@@ -322,6 +322,7 @@ class FindReplaceDialog(QDialog):
         self.find_edit.textChanged.connect(self._update_match_count)
         self.case_cb.toggled.connect(self._update_match_count)
         self.whole_cb.toggled.connect(self._update_match_count)
+        self.editor.document().contentsChanged.connect(self._update_match_count)
 
         # Buttons
         btn_row = QHBoxLayout()
@@ -370,6 +371,34 @@ class FindReplaceDialog(QDialog):
         else:
             self._match_label.setText(f"{count} matches")
 
+    def _highlight_current(self):
+        match_cursor = self.editor.textCursor()
+        if not match_cursor.hasSelection():
+            self.editor.setExtraSelections([])
+            return
+        # Drop the active selection so it doesn't paint over the extra selection
+        nav_cursor = QTextCursor(match_cursor)
+        nav_cursor.setPosition(match_cursor.selectionEnd())
+        self.editor.setTextCursor(nav_cursor)
+        extra = QTextEdit.ExtraSelection()
+        extra.cursor = match_cursor
+        dark = getattr(self.parent(), "_dark_mode", False)
+        if dark:
+            extra.format.setBackground(QColor("#ffffff"))
+            extra.format.setForeground(QColor("#000000"))
+        else:
+            extra.format.setBackground(QColor("#ffff00"))
+            extra.format.setForeground(QColor("#000000"))
+        self.editor.setExtraSelections([extra])
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._update_match_count()
+
+    def closeEvent(self, event):
+        self.editor.setExtraSelections([])
+        super().closeEvent(event)
+
     def find_next(self):
         term = self.find_edit.text()
         if not term:
@@ -381,13 +410,18 @@ class FindReplaceDialog(QDialog):
             cursor.movePosition(QTextCursor.MoveOperation.Start)
             self.editor.setTextCursor(cursor)
             self.editor.find(term, self._flags())
+        self._highlight_current()
 
     def replace_one(self):
         term = self.find_edit.text()
         replacement = self.replace_edit.text()
-        cursor = self.editor.textCursor()
-        if cursor.hasSelection() and cursor.selectedText() == term:
-            cursor.insertText(replacement)
+        # Use the extra selection's cursor (which holds the match) for replacement
+        selections = self.editor.extraSelections()
+        if selections and selections[0].cursor.hasSelection():
+            c = selections[0].cursor
+            if c.selectedText() == term:
+                c.insertText(replacement)
+                self.editor.setTextCursor(c)
         self.find_next()
 
     def replace_all(self):
