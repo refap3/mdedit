@@ -17,7 +17,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QAction, QColor, QFont, QKeySequence, QPalette,
-    QSyntaxHighlighter, QTextCharFormat, QTextCursor,
+    QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
 )
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QHBoxLayout,
@@ -87,6 +87,11 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         # Italic
         rules.append((re.compile(r"(?<!\*)\*(?!\*).+?(?<!\*)\*(?!\*)|(?<!_)_(?!_).+?(?<!_)_(?!_)"),
                       self._fmt("#9cdcfe" if dm else "#1a7f37", italic=True)))
+
+        # Strikethrough
+        strike_fmt = self._fmt("#808080" if dm else "#57606a")
+        strike_fmt.setFontStrikeOut(True)
+        rules.append((re.compile(r"~~.+?~~"), strike_fmt))
 
         # Inline code
         code_fmt = self._fmt("#ce9178" if dm else "#d97706")
@@ -310,7 +315,13 @@ class FindReplaceDialog(QDialog):
         opts_row.addWidget(self.case_cb)
         opts_row.addWidget(self.whole_cb)
         opts_row.addStretch()
+        self._match_label = QLabel("")
+        opts_row.addWidget(self._match_label)
         layout.addLayout(opts_row)
+
+        self.find_edit.textChanged.connect(self._update_match_count)
+        self.case_cb.toggled.connect(self._update_match_count)
+        self.whole_cb.toggled.connect(self._update_match_count)
 
         # Buttons
         btn_row = QHBoxLayout()
@@ -336,6 +347,28 @@ class FindReplaceDialog(QDialog):
         if self.whole_cb.isChecked():
             flags |= QTextDocument.FindFlag.FindWholeWords
         return flags
+
+    def _update_match_count(self):
+        term = self.find_edit.text()
+        if not term:
+            self._match_label.setText("")
+            return
+        doc = self.editor.document()
+        cursor = QTextCursor(doc)
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        flags = self._flags()
+        count = 0
+        while True:
+            cursor = doc.find(term, cursor, flags)
+            if cursor.isNull():
+                break
+            count += 1
+        if count == 0:
+            self._match_label.setText("No matches")
+        elif count == 1:
+            self._match_label.setText("1 match")
+        else:
+            self._match_label.setText(f"{count} matches")
 
     def find_next(self):
         term = self.find_edit.text()
@@ -753,11 +786,21 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_toolbar_dark_action"):
             self._toolbar_dark_action.setChecked(dark)
 
+        preview_visible = self.settings.value("previewVisible", True, type=bool)
+        if not preview_visible:
+            self.action_toggle_preview(False)
+
+        word_wrap = self.settings.value("wordWrap", True, type=bool)
+        self.word_wrap_action.setChecked(word_wrap)
+        self.action_toggle_wrap()
+
     def _save_state(self):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("splitterState", self.splitter.saveState())
         self.settings.setValue("darkMode", self._dark_mode)
         self.settings.setValue("recentFiles", self._recent_files)
+        self.settings.setValue("previewVisible", self.preview.isVisible())
+        self.settings.setValue("wordWrap", self.word_wrap_action.isChecked())
 
     def _update_title(self):
         name = Path(self.current_file).name if self.current_file else "Untitled"
@@ -784,13 +827,19 @@ class MainWindow(QMainWindow):
         self._recent_files = self._recent_files[:MAX_RECENT]
         self._rebuild_recent_menu()
 
+    def _shorten_path(self, path: str) -> str:
+        try:
+            return "~" + os.sep + str(Path(path).relative_to(Path.home()))
+        except ValueError:
+            return path
+
     def _rebuild_recent_menu(self):
         self.recent_menu.clear()
         if not self._recent_files:
             self.recent_menu.addAction("(none)").setEnabled(False)
             return
         for path in self._recent_files:
-            act = QAction(path, self)
+            act = QAction(self._shorten_path(path), self)
             act.setData(path)
             act.triggered.connect(self._open_recent)
             self.recent_menu.addAction(act)
@@ -1012,7 +1061,11 @@ class MainWindow(QMainWindow):
         cursor = self.editor.textCursor()
         if cursor.hasSelection():
             text = cursor.selectedText()
-            cursor.insertText(f"{before}{text}{after}")
+            # Toggle: unwrap if already wrapped, otherwise wrap
+            if text.startswith(before) and text.endswith(after) and len(text) > len(before) + len(after):
+                cursor.insertText(text[len(before):-len(after)])
+            else:
+                cursor.insertText(f"{before}{text}{after}")
         else:
             cursor.insertText(f"{before}text{after}")
             # Move cursor back to select placeholder
