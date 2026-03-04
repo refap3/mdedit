@@ -7,27 +7,24 @@ DEST="${MDEDIT_DIR:-$HOME/mdedit}"
 VENV="$DEST/.venv"
 BIN="${MDEDIT_BIN:-$HOME/.local/bin}"
 
-# Already installed?
 if [ -d "$DEST/.git" ]; then
-    echo "MDEdit already installed at $DEST"
-    echo "To update: bash $DEST/update.sh"
-    exit 0
+    echo "MDEdit already installed at $DEST — refreshing launchers ..."
+else
+    # Clone
+    echo "Cloning mdedit into $DEST ..."
+    git clone --depth 1 https://github.com/refap3/mdedit "$DEST"
+
+    # Virtual environment
+    echo "Creating virtual environment ..."
+    python3 -m venv "$VENV"
+
+    # Dependencies
+    echo "Installing dependencies ..."
+    "$VENV/bin/pip" install -q --upgrade pip
+    "$VENV/bin/pip" install -q -r "$DEST/requirements.txt"
 fi
 
-# Clone
-echo "Cloning mdedit into $DEST ..."
-git clone --depth 1 https://github.com/refap3/mdedit "$DEST"
-
-# Virtual environment
-echo "Creating virtual environment ..."
-python3 -m venv "$VENV"
-
-# Dependencies
-echo "Installing dependencies ..."
-"$VENV/bin/pip" install -q --upgrade pip
-"$VENV/bin/pip" install -q -r "$DEST/requirements.txt"
-
-# Launcher scripts
+# Launcher scripts (always written so re-running repairs missing launchers)
 mkdir -p "$BIN"
 cat > "$BIN/mdedit" <<EOF
 #!/usr/bin/env bash
