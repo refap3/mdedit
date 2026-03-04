@@ -544,7 +544,7 @@ SHORTCUTS = [
     ("Format",      "Bold",                 "Ctrl+Shift+B"),
     ("Format",      "Italic",               "Ctrl+Shift+I"),
     ("Help",        "Markdown Reference",   "F1"),
-    ("Help",        "Keyboard Shortcuts",   "F2"),
+    ("Help",        "Keyboard Shortcuts",   "Shift+F1"),
 ]
 
 
@@ -726,7 +726,7 @@ class MainWindow(QMainWindow):
         self._add_action(help_menu, "Markdown &Reference", self.action_help,
                          QKeySequence("F1"))
         self._add_action(help_menu, "&Keyboard Shortcuts", self.action_shortcuts,
-                         QKeySequence("F2"))
+                         QKeySequence("Shift+F1"))
         help_menu.addSeparator()
         self._add_action(help_menu, "&About", self.action_about)
 
