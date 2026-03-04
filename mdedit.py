@@ -22,7 +22,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QHBoxLayout,
     QLabel, QLineEdit, QMainWindow, QCheckBox,
-    QMessageBox, QPushButton, QSplitter, QStatusBar,
+    QMessageBox, QPushButton, QShortcut, QSplitter, QStatusBar,
     QTextEdit, QVBoxLayout, QWidget, QScrollArea,
     QDialogButtonBox,
 )
@@ -516,8 +516,12 @@ class HelpDialog(QDialog):
         layout.addWidget(view)
 
         close_btn = QPushButton("Close")
+        close_btn.setDefault(True)
         close_btn.clicked.connect(self.close)
         layout.addWidget(close_btn)
+
+        QShortcut(QKeySequence("Escape"), self, self.close)
+        QShortcut(QKeySequence("Return"), self, self.close)
 
 
 # ---------------------------------------------------------------------------
@@ -571,8 +575,12 @@ class ShortcutsDialog(QDialog):
         layout.addWidget(text)
 
         btn = QPushButton("Close")
+        btn.setDefault(True)
         btn.clicked.connect(self.close)
         layout.addWidget(btn)
+
+        QShortcut(QKeySequence("Escape"), self, self.close)
+        QShortcut(QKeySequence("Return"), self, self.close)
 
 
 # ---------------------------------------------------------------------------
