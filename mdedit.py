@@ -789,6 +789,7 @@ class MainWindow(QMainWindow):
             ("tbl",   self._insert_table),
             ("1.",    self._insert_numbered_list),
             ("-",     self._insert_bullet_list),
+            ("---",   lambda: self._insert_text("\n---\n")),
         ]:
             act = QAction(label, self)
             act.triggered.connect(slot)
