@@ -96,6 +96,15 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | Bold | `Ctrl+Shift+B` |
 | Italic | `Ctrl+Shift+I` |
 
+## Man page
+
+```bash
+man mdedit
+```
+
+Requires the [alias](https://github.com/refap3/alias) repo to be installed (it sets `MANPATH`).
+Or directly: `man ~/mdedit/man/man1/mdedit.1`
+
 ## Building a Mac .app + .dmg
 
 ```bash

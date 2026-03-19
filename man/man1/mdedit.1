@@ -1,0 +1,163 @@
+.TH MDEDIT 1 "2026-03-19" "mdedit" "User Commands"
+.SH NAME
+mdedit \- cross-platform Markdown editor with live preview
+.SH SYNOPSIS
+.B mdedit
+.RI [ file.md ]
+.SH DESCRIPTION
+.B MDEdit
+is a lightweight Markdown editor built with Python and PyQt6.
+It shows a side-by-side live preview that updates as you type (300 ms debounce).
+The preview uses GitHub-style CSS and supports dark and light mode.
+.PP
+The editor runs on macOS and Windows.
+It is a single Python file
+.RI ( mdedit.py )
+with no external UI dependencies beyond PyQt6, PyQt6-WebEngine (optional), the
+.I markdown
+library, and Pygments for syntax highlighting.
+.SH INSTALL
+.B One-line install (macOS/Linux):
+.PP
+.RS
+curl -fsSL https://raw.githubusercontent.com/refap3/mdedit/main/install.sh | bash
+.RE
+.PP
+.B One-line install (Windows PowerShell):
+.PP
+.RS
+irm https://raw.githubusercontent.com/refap3/mdedit/main/install.ps1 | iex
+.RE
+.PP
+The installer clones the repo, creates a Python virtual environment, installs dependencies,
+and adds the
+.B mdedit
+command to
+.IR ~/.local/bin/ .
+.PP
+.B Update:
+.PP
+.RS
+mdedit-update
+.RE
+.PP
+.B Manual install:
+.PP
+.RS
+git clone https://github.com/refap3/mdedit.git
+.br
+cd mdedit
+.br
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.br
+.venv/bin/python mdedit.py
+.RE
+.SH FEATURES
+.TP
+.B Live preview
+HTML preview pane updates 300 ms after you stop typing.
+Uses WebEngine (Chromium) if available, falls back to QTextBrowser.
+.TP
+.B Syntax highlighting
+The editor pane highlights headings, bold, italic, strikethrough, inline code, fenced code
+blocks, links, and lists.
+.TP
+.B Find & Replace
+.RB ( Ctrl+F )
+Case-sensitive and whole-word options.
+Live match count.
+Current match highlighted.
+.TP
+.B Format helpers
+Bold, Italic, Inline Code, Code Block, Link, Image, Table, HR.
+Re-applying a format to selected text toggles it off.
+.TP
+.B Markdown extensions
+Tables, fenced code blocks, table of contents, syntax-highlighted code blocks via Pygments.
+.TP
+.B File operations
+New, Open, Save, Save As, Export to HTML.
+Recent files menu (last 10, shortened paths).
+.TP
+.B Persistent state
+Window size, splitter position, dark/light mode, preview visibility, word wrap, and recent
+files are remembered across launches.
+.TP
+.B Dark mode
+Toggle via
+.B View > Dark Mode.
+The editor, preview CSS, and all UI chrome switch to dark colours.
+.SH KEYBOARD SHORTCUTS
+.TS
+l l.
+Ctrl+N	New file
+Ctrl+O	Open file
+Ctrl+S	Save
+Ctrl+Shift+S	Save As
+Ctrl+Q	Quit
+Ctrl+Z	Undo
+Ctrl+Y	Redo
+Ctrl+X / Ctrl+C / Ctrl+V	Cut / Copy / Paste
+Ctrl+A	Select All
+Ctrl+F	Find & Replace
+Ctrl+Shift+P	Toggle preview pane
+Ctrl+Shift+Up	Zoom In
+Ctrl+Shift+Down	Zoom Out
+Ctrl+0	Reset Zoom
+Ctrl+Shift+B	Bold
+Ctrl+Shift+I	Italic
+.TE
+.SH PROJECT STRUCTURE
+.TS
+l l.
+mdedit.py	Main application (single file)
+mdedit.spec	PyInstaller bundle config
+build.sh	Build .app + .dmg (macOS)
+install.sh	One-line installer (macOS/Linux)
+install.ps1	One-line installer (Windows PowerShell)
+update.sh	Updater (macOS/Linux)
+update.ps1	Updater (Windows)
+requirements.txt	Python dependencies
+.TE
+.SH BUILDING
+.B macOS .app + .dmg:
+.PP
+.RS
+./build.sh
+.RE
+.PP
+Produces
+.I dist/MDEdit.app
+and
+.IR dist/MDEdit.dmg .
+PyInstaller is installed automatically into
+.I .venv
+if not present.
+.PP
+After a build, these can be deleted:
+.PP
+.RS
+rm -rf build/ dist/ __pycache__/ [.venv/]
+.RE
+.SH REQUIREMENTS
+.TP
+Python 3.10+
+.TP
+PyQt6 >= 6.4
+.TP
+PyQt6-WebEngine
+Optional. Falls back to QTextBrowser if not installed.
+.TP
+markdown
+Python Markdown library with extensions (tables, fenced_code, toc, codehilite).
+.TP
+Pygments
+Syntax-highlighted code blocks in the preview.
+.SH SEE ALSO
+.BR python3 (1)
+.SH VIEW THIS PAGE
+.RS
+man mdedit
+.RE
+.SH AUTHOR
+rainers
