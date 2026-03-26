@@ -13,7 +13,7 @@ os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-logging --log-lev
 os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false;qt.webenginecontext.info=false")
 
 from PyQt6.QtCore import (
-    Qt, QTimer, QSettings, QSize, QPoint, QRect,
+    Qt, QTimer, QSettings, QSize, QPoint, QRect, QFileSystemWatcher,
 )
 from PyQt6.QtGui import (
     QAction, QColor, QFont, QKeySequence, QPalette,
@@ -594,6 +594,9 @@ class MainWindow(QMainWindow):
         self.is_modified = False
         self._find_dialog: FindReplaceDialog | None = None
         self._dark_mode = False
+        self._saving = False
+        self._watcher = QFileSystemWatcher()
+        self._watcher.fileChanged.connect(self._on_file_changed_externally)
 
         self.settings = QSettings(ORG_NAME, APP_NAME)
         self._recent_files: list[str] = self.settings.value("recentFiles", []) or []
@@ -936,6 +939,10 @@ class MainWindow(QMainWindow):
         self.editor.blockSignals(True)
         self.editor.setPlainText(text)
         self.editor.blockSignals(False)
+        # Update file watcher
+        if self._watcher.files():
+            self._watcher.removePaths(self._watcher.files())
+        self._watcher.addPath(path)
         self.current_file = path
         self.is_modified = False
         self._add_recent(path)
@@ -946,6 +953,8 @@ class MainWindow(QMainWindow):
     def action_new(self):
         if not self._check_unsaved():
             return
+        if self._watcher.files():
+            self._watcher.removePaths(self._watcher.files())
         self.editor.clear()
         self.current_file = None
         self.is_modified = False
@@ -968,12 +977,15 @@ class MainWindow(QMainWindow):
         if not self.current_file:
             return self.action_save_as()
         try:
+            self._saving = True
+            QTimer.singleShot(500, lambda: setattr(self, "_saving", False))
             Path(self.current_file).write_text(
                 self.editor.toPlainText(), encoding="utf-8")
             self.is_modified = False
             self._update_title()
             return True
         except Exception as exc:
+            self._saving = False
             QMessageBox.critical(self, "Save Error", str(exc))
             return False
 
@@ -1027,6 +1039,25 @@ class MainWindow(QMainWindow):
 
     def _refresh_preview(self):
         self.preview.set_html(self._render_markdown())
+
+    def _on_file_changed_externally(self, path: str):
+        if self._saving:
+            return
+        # Re-watch: on some systems the watcher drops the file after a change
+        if path not in self._watcher.files() and os.path.exists(path):
+            self._watcher.addPath(path)
+        if not os.path.exists(path) or self.is_modified:
+            return
+        try:
+            text = Path(path).read_text(encoding="utf-8")
+        except Exception:
+            return
+        self.editor.blockSignals(True)
+        self.editor.setPlainText(text)
+        self.editor.blockSignals(False)
+        self.is_modified = False
+        self._update_title()
+        self._refresh_preview()
 
     # ------------------------------------------------- View actions
 

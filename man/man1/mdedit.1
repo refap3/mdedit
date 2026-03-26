@@ -1,4 +1,4 @@
-.TH MDEDIT 1 "2026-03-19" "mdedit" "User Commands"
+.TH MDEDIT 1 "2026-03-26" "mdedit" "User Commands"
 .SH NAME
 mdedit \- cross-platform Markdown editor with live preview
 .SH SYNOPSIS
@@ -61,6 +61,10 @@ Uses WebEngine (Chromium) if available, falls back to QTextBrowser.
 .B Syntax highlighting
 The editor pane highlights headings, bold, italic, strikethrough, inline code, fenced code
 blocks, links, and lists.
+.TP
+.B Auto-reload
+When the open file is modified by an external program, the editor silently reloads it.
+If you have unsaved edits the reload is skipped to avoid data loss.
 .TP
 .B Find & Replace
 .RB ( Ctrl+F )
