@@ -16,15 +16,16 @@ from PyQt6.QtCore import (
     Qt, QTimer, QSettings, QSize, QPoint, QRect, QFileSystemWatcher,
 )
 from PyQt6.QtGui import (
-    QAction, QColor, QFont, QKeySequence, QPalette,
-    QShortcut, QSyntaxHighlighter, QTextCharFormat, QTextCursor, QTextDocument,
+    QAction, QColor, QFont, QIcon, QKeySequence, QLinearGradient, QPainter,
+    QPalette, QPixmap, QShortcut, QSyntaxHighlighter, QTextCharFormat,
+    QTextCursor, QTextDocument,
 )
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QHBoxLayout,
     QLabel, QLineEdit, QMainWindow, QCheckBox,
     QMessageBox, QPushButton, QSplitter, QStatusBar,
-    QTextEdit, QVBoxLayout, QWidget, QScrollArea,
-    QDialogButtonBox,
+    QTextEdit, QToolButton, QVBoxLayout, QWidget, QScrollArea,
+    QDialogButtonBox, QMenu,
 )
 
 try:
@@ -41,6 +42,7 @@ except ImportError:
 
 APP_NAME = "MDEdit"
 ORG_NAME = "MDEdit"
+VERSION = "1.2.0"
 MAX_RECENT = 10
 
 
@@ -584,6 +586,41 @@ class ShortcutsDialog(QDialog):
 
 
 # ---------------------------------------------------------------------------
+# App Icon
+# ---------------------------------------------------------------------------
+
+def _make_app_icon() -> QIcon:
+    """Blue rounded-rect with 'MD' over 'edit' — used as window and dock icon."""
+    size = 256
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    grad = QLinearGradient(0, 0, size, size)
+    grad.setColorAt(0.0, QColor("#1e40af"))
+    grad.setColorAt(1.0, QColor("#3b82f6"))
+    p.setBrush(grad)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.drawRoundedRect(0, 0, size, size, 48, 48)
+
+    # "MD" — upper portion
+    f1 = QFont("Arial", 108, QFont.Weight.Bold)
+    p.setFont(f1)
+    p.setPen(QColor("#ffffff"))
+    p.drawText(QRect(0, -18, size, size), Qt.AlignmentFlag.AlignCenter, "MD")
+
+    # "edit" — lower portion, muted
+    f2 = QFont("Arial", 36, QFont.Weight.Normal)
+    p.setFont(f2)
+    p.setPen(QColor("#93c5fd"))
+    p.drawText(QRect(0, 104, size, size), Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, "edit")
+
+    p.end()
+    return QIcon(pix)
+
+
+# ---------------------------------------------------------------------------
 # Main Window
 # ---------------------------------------------------------------------------
 
@@ -604,10 +641,14 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._build_menus()
         self._build_toolbar()
+        self._rebuild_open_recent_tb_menu()
         self._build_status_bar()
         self._restore_state()
         self._update_title()
         self._apply_theme()
+        icon = _make_app_icon()
+        self.setWindowIcon(icon)
+        QApplication.instance().setWindowIcon(icon)
 
         # Debounce timer for live preview
         self._preview_timer = QTimer()
@@ -754,14 +795,20 @@ class MainWindow(QMainWindow):
         tb.setMovable(False)
         tb.setIconSize(QSize(18, 18))
 
-        for label, slot in [
-            ("New", self.action_new),
-            ("Open", self.action_open),
-            ("Save", self.action_save),
-        ]:
+        for label, slot in [("New", self.action_new), ("Save", self.action_save)]:
             act = QAction(label, self)
             act.triggered.connect(slot)
             tb.addAction(act)
+
+        # Open split-button: click → open dialog, arrow → recent files
+        open_btn = QToolButton()
+        open_btn.setText("Open")
+        open_btn.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        open_btn.clicked.connect(self.action_open)
+        self._open_recent_tb_menu = QMenu(self)
+        open_btn.setMenu(self._open_recent_tb_menu)
+        self._open_tb_btn = open_btn
+        tb.insertWidget(tb.actions()[1], open_btn)  # between New and Save
 
         tb.addSeparator()
 
@@ -883,16 +930,31 @@ class MainWindow(QMainWindow):
         self.recent_menu.clear()
         if not self._recent_files:
             self.recent_menu.addAction("(none)").setEnabled(False)
+        else:
+            for path in self._recent_files:
+                act = QAction(self._shorten_path(path), self)
+                act.setData(path)
+                act.triggered.connect(self._open_recent)
+                self.recent_menu.addAction(act)
+            self.recent_menu.addSeparator()
+            clear_act = QAction("Clear Recent Files", self)
+            clear_act.triggered.connect(self._clear_recent)
+            self.recent_menu.addAction(clear_act)
+        self._rebuild_open_recent_tb_menu()
+
+    def _rebuild_open_recent_tb_menu(self):
+        if not hasattr(self, "_open_recent_tb_menu"):
+            return
+        menu = self._open_recent_tb_menu
+        menu.clear()
+        if not self._recent_files:
+            menu.addAction("(no recent files)").setEnabled(False)
             return
         for path in self._recent_files:
             act = QAction(self._shorten_path(path), self)
             act.setData(path)
             act.triggered.connect(self._open_recent)
-            self.recent_menu.addAction(act)
-        self.recent_menu.addSeparator()
-        clear_act = QAction("Clear Recent Files", self)
-        clear_act.triggered.connect(self._clear_recent)
-        self.recent_menu.addAction(clear_act)
+            menu.addAction(act)
 
     def _open_recent(self):
         act = self.sender()
@@ -1218,11 +1280,16 @@ class MainWindow(QMainWindow):
     def action_about(self):
         has_web = "yes" if HAS_WEBENGINE else "no (using QTextBrowser)"
         has_md = "yes" if HAS_MARKDOWN else "no (install: pip install markdown)"
+        import PyQt6.QtCore as _qtc
+        qt_ver = _qtc.QT_VERSION_STR
+        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
         QMessageBox.about(
             self, f"About {APP_NAME}",
-            f"<b>{APP_NAME}</b><br>"
+            f"<b>{APP_NAME}</b> &nbsp; v{VERSION}<br>"
             f"A cross-platform Markdown editor<br><br>"
-            f"PyQt6 WebEngine: {has_web}<br>"
+            f"Python: {py_ver}<br>"
+            f"Qt: {qt_ver}<br>"
+            f"WebEngine: {has_web}<br>"
             f"markdown library: {has_md}<br><br>"
             f"<a href='https://daringfireball.net/projects/markdown/'>Markdown Spec</a>",
         )

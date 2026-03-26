@@ -12,7 +12,7 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 - **GitHub-style CSS** — clean preview with dark/light mode support
 - **Syntax highlighting** in the editor — headings, bold, italic, strikethrough, code, links, lists
 - **Auto-reload** — detects external file changes and silently reloads (like VS Code); skips reload if you have unsaved edits
-- **File operations** — New, Open, Save, Save As, Export HTML, Open Recent (last 10 files, shortened paths)
+- **File operations** — New, Open (split toolbar button with Recent Files dropdown), Save, Save As, Export HTML, Open Recent (last 10, shortened paths)
 - **Find & Replace** — case-sensitive and whole-word options, live match count, highlighted current match
 - **Format helpers** — Bold, Italic, Inline Code, Code Block, Link, Image, Table, HR (re-applying a format toggles it off)
 - **Markdown extensions** — tables, fenced code blocks, TOC, syntax-highlighted code (Pygments)
