@@ -6,6 +6,10 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 ![PyQt6](https://img.shields.io/badge/PyQt6-6.4%2B-green)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey)
 
+## Version
+
+Current release: **v1.3.0**
+
 ## Features
 
 - **Side-by-side live preview** — rendered HTML updates as you type (300 ms debounce)
@@ -17,6 +21,8 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 - **Format helpers** — Bold, Italic, Inline Code, Code Block, Link, Image, Table, HR (re-applying a format toggles it off)
 - **Markdown extensions** — tables, fenced code blocks, TOC, syntax-highlighted code (Pygments)
 - **Persistent state** — window size, splitter position, dark mode, preview visibility, word wrap, recent files
+- **Toolbar Help menu** — Markdown Reference, Keyboard Shortcuts, and About accessible from a single toolbar dropdown
+- **Custom app icon** — programmatic blue gradient icon, shown in window title bar and dock/taskbar
 - **Command-line** — open a file directly: `python3 mdedit.py file.md`
 
 ## Screenshots
