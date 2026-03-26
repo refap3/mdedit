@@ -42,7 +42,7 @@ except ImportError:
 
 APP_NAME = "MDEdit"
 ORG_NAME = "MDEdit"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 MAX_RECENT = 10
 
 
@@ -859,6 +859,22 @@ class MainWindow(QMainWindow):
         act.triggered.connect(self.action_toggle_dark)
         self._toolbar_dark_action = act
         tb.addAction(act)
+
+        tb.addSeparator()
+        help_btn = QToolButton()
+        help_btn.setText("Help")
+        help_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        help_menu = QMenu(self)
+        for label, slot in [
+            ("Markdown Reference", self.action_help),
+            ("Keyboard Shortcuts", self.action_shortcuts),
+            ("About",              self.action_about),
+        ]:
+            a = QAction(label, self)
+            a.triggered.connect(slot)
+            help_menu.addAction(a)
+        help_btn.setMenu(help_menu)
+        tb.addWidget(help_btn)
 
     # -------------------------------------------------------- State / Title
 
