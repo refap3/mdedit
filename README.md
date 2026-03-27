@@ -8,19 +8,21 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 ## Version
 
-Current release: **v1.3.0**
+Current release: **v1.4.0**
 
 ## Features
 
+- **Multi-tab interface** — open multiple files simultaneously; tabs are closable and reorderable
+- **Session restore** — all open tabs are re-opened automatically on next launch
 - **Side-by-side live preview** — rendered HTML updates as you type (300 ms debounce)
 - **GitHub-style CSS** — clean preview with dark/light mode support
 - **Syntax highlighting** in the editor — headings, bold, italic, strikethrough, code, links, lists
-- **Auto-reload** — detects external file changes and silently reloads (like VS Code); skips reload if you have unsaved edits
-- **File operations** — New, Open (split toolbar button with Recent Files dropdown), Save, Save As, Export HTML, Open Recent (last 10, shortened paths)
-- **Find & Replace** — case-sensitive and whole-word options, live match count, highlighted current match
+- **Auto-reload** — detects external file changes and silently reloads (watcher + 2 s mtime poll); skips reload if you have unsaved edits; also checks on tab switch
+- **File operations** — New Tab, Open (split toolbar button with Recent Files dropdown), Save, Save As, Export HTML, Open Recent (last 10, shortened paths)
+- **Find & Replace** — per-tab dialog; case-sensitive and whole-word options, live match count, highlighted current match
 - **Format helpers** — Bold, Italic, Inline Code, Code Block, Link, Image, Table, HR (re-applying a format toggles it off)
 - **Markdown extensions** — tables, fenced code blocks, TOC, syntax-highlighted code (Pygments)
-- **Persistent state** — window size, splitter position, dark mode, preview visibility, word wrap, recent files
+- **Persistent state** — window size, splitter position, dark mode, preview visibility, word wrap, recent files, open tabs
 - **Toolbar Help menu** — Markdown Reference, Keyboard Shortcuts, and About accessible from a single toolbar dropdown
 - **Custom app icon** — programmatic blue gradient icon, shown in window title bar and dock/taskbar
 - **Command-line** — open a file directly: `python3 mdedit.py file.md`
@@ -86,9 +88,14 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 ## Keyboard Shortcuts
 
+On macOS `Ctrl` = `⌘` except where noted with `^` (physical Control key).
+
 | Action | Shortcut |
 |---|---|
-| New | `Ctrl+N` |
+| New Tab | `Ctrl+T` |
+| Close Tab | `Ctrl+W` |
+| Next Tab | `^Tab` (Control+Tab) |
+| Prev Tab | `^Shift+Tab` |
 | Open | `Ctrl+O` |
 | Save | `Ctrl+S` |
 | Save As | `Ctrl+Shift+S` |

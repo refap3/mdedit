@@ -1,4 +1,4 @@
-.TH MDEDIT 1 "2026-03-26" "mdedit 1.3.0" "User Commands"
+.TH MDEDIT 1 "2026-03-27" "mdedit 1.4.0" "User Commands"
 .SH NAME
 mdedit \- cross-platform Markdown editor with live preview
 .SH SYNOPSIS
@@ -54,6 +54,16 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .RE
 .SH FEATURES
 .TP
+.B Multi-tab interface
+Open multiple files simultaneously in tabs.
+Tabs are closable (× button or
+.BR Ctrl+W )
+and reorderable by drag.
+.TP
+.B Session restore
+All open tabs are re-opened automatically on next launch, with the previously active tab
+selected.
+.TP
 .B Live preview
 HTML preview pane updates 300 ms after you stop typing.
 Uses WebEngine (Chromium) if available, falls back to QTextBrowser.
@@ -63,11 +73,15 @@ The editor pane highlights headings, bold, italic, strikethrough, inline code, f
 blocks, links, and lists.
 .TP
 .B Auto-reload
-When the open file is modified by an external program, the editor silently reloads it.
-If you have unsaved edits the reload is skipped to avoid data loss.
+When a file is modified externally, the editor silently reloads it.
+Uses both a filesystem watcher (immediate) and a 2-second mtime poll (catches atomic-rename
+saves from editors like vim).
+Reload is skipped if you have unsaved edits.
+Switching to a tab also checks for external changes.
 .TP
 .B Find & Replace
 .RB ( Ctrl+F )
+Per-tab dialog.
 Case-sensitive and whole-word options.
 Live match count.
 Current match highlighted.
@@ -80,14 +94,14 @@ Re-applying a format to selected text toggles it off.
 Tables, fenced code blocks, table of contents, syntax-highlighted code blocks via Pygments.
 .TP
 .B File operations
-New, Open, Save, Save As, Export to HTML.
+New Tab, Open, Save, Save As, Export to HTML.
 The toolbar Open button is a split button: click to open a file dialog,
 click the arrow to pick from the last 10 recent files.
 Full Open Recent submenu also in the File menu.
 .TP
 .B Persistent state
-Window size, splitter position, dark/light mode, preview visibility, word wrap, and recent
-files are remembered across launches.
+Window size, splitter position, dark/light mode, preview visibility, word wrap, recent files,
+and open tabs are remembered across launches.
 .TP
 .B Dark mode
 Toggle via
@@ -108,9 +122,15 @@ Also reported via
 .B Help > About
 as Python version, Qt version, and MDEdit version.
 .SH KEYBOARD SHORTCUTS
+On macOS,
+.I Ctrl
+maps to the Command key (⌘) except tab-navigation shortcuts which use the physical Control key (^).
 .TS
 l l.
-Ctrl+N	New file
+Ctrl+T	New Tab
+Ctrl+W	Close Tab
+^Tab	Next Tab (Control+Tab)
+^Shift+Tab	Previous Tab
 Ctrl+O	Open file
 Ctrl+S	Save
 Ctrl+Shift+S	Save As

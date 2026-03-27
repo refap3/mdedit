@@ -23,7 +23,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QHBoxLayout,
     QLabel, QLineEdit, QMainWindow, QCheckBox,
-    QMessageBox, QPushButton, QSplitter, QStatusBar,
+    QMessageBox, QPushButton, QSplitter, QStatusBar, QTabWidget,
     QTextEdit, QToolButton, QVBoxLayout, QWidget, QScrollArea,
     QDialogButtonBox, QMenu,
 )
@@ -42,7 +42,7 @@ except ImportError:
 
 APP_NAME = "MDEdit"
 ORG_NAME = "MDEdit"
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 MAX_RECENT = 10
 
 
@@ -282,6 +282,35 @@ class PreviewPane(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Tab Data  (per-tab state + widgets)
+# ---------------------------------------------------------------------------
+
+class TabData:
+    """Holds all state and widgets for a single editor tab."""
+
+    def __init__(self):
+        self.file_path: str | None = None
+        self.is_modified: bool = False
+        self.saving: bool = False
+        self.file_mtime: float | None = None
+        self.find_dialog: "FindReplaceDialog | None" = None
+        self.saved_preview_size: int | None = None
+        self.highlighter: "MarkdownHighlighter | None" = None
+
+        self.editor = EditorPane()
+        self.preview = PreviewPane()
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.addWidget(self.editor)
+        self.splitter.addWidget(self.preview)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 1)
+
+        self.preview_timer = QTimer()
+        self.preview_timer.setSingleShot(True)
+        self.preview_timer.setInterval(300)
+
+
+# ---------------------------------------------------------------------------
 # Find & Replace Dialog
 # ---------------------------------------------------------------------------
 
@@ -378,7 +407,6 @@ class FindReplaceDialog(QDialog):
         if not match_cursor.hasSelection():
             self.editor.setExtraSelections([])
             return
-        # Drop the active selection so it doesn't paint over the extra selection
         nav_cursor = QTextCursor(match_cursor)
         nav_cursor.setPosition(match_cursor.selectionEnd())
         self.editor.setTextCursor(nav_cursor)
@@ -407,7 +435,6 @@ class FindReplaceDialog(QDialog):
             return
         found = self.editor.find(term, self._flags())
         if not found:
-            # Wrap around
             cursor = self.editor.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.Start)
             self.editor.setTextCursor(cursor)
@@ -417,7 +444,6 @@ class FindReplaceDialog(QDialog):
     def replace_one(self):
         term = self.find_edit.text()
         replacement = self.replace_edit.text()
-        # Use the extra selection's cursor (which holds the match) for replacement
         selections = self.editor.extraSelections()
         if selections and selections[0].cursor.hasSelection():
             c = selections[0].cursor
@@ -501,7 +527,6 @@ class HelpDialog(QDialog):
             view = QTextEdit()
             view.setReadOnly(True)
 
-        # Render via preview pane helper
         pane = PreviewPane()
         if HAS_MARKDOWN:
             html_body = markdown.markdown(
@@ -531,7 +556,8 @@ class HelpDialog(QDialog):
 # ---------------------------------------------------------------------------
 
 SHORTCUTS = [
-    ("File",        "New",                  "Ctrl+N"),
+    ("File",        "New Tab",              "Ctrl+T"),
+    ("File",        "Close Tab",            "Ctrl+W"),
     ("File",        "Open",                 "Ctrl+O"),
     ("File",        "Save",                 "Ctrl+S"),
     ("File",        "Save As",              "Ctrl+Shift+S"),
@@ -544,6 +570,8 @@ SHORTCUTS = [
     ("Edit",        "Select All",           "Ctrl+A"),
     ("Edit",        "Find & Replace",       "Ctrl+F"),
     ("View",        "Toggle Preview",       "Ctrl+Shift+P"),
+    ("View",        "Next Tab",             "Ctrl+Tab"),
+    ("View",        "Prev Tab",             "Ctrl+Shift+Tab"),
     ("View",        "Zoom In",              "Ctrl+Shift+Up"),
     ("View",        "Zoom Out",             "Ctrl+Shift+Down"),
     ("View",        "Reset Zoom",           "Ctrl+0"),
@@ -604,13 +632,11 @@ def _make_app_icon() -> QIcon:
     p.setPen(Qt.PenStyle.NoPen)
     p.drawRoundedRect(0, 0, size, size, 48, 48)
 
-    # "MD" — upper portion
     f1 = QFont("Arial", 108, QFont.Weight.Bold)
     p.setFont(f1)
     p.setPen(QColor("#ffffff"))
     p.drawText(QRect(0, -18, size, size), Qt.AlignmentFlag.AlignCenter, "MD")
 
-    # "edit" — lower portion, muted
     f2 = QFont("Arial", 36, QFont.Weight.Normal)
     p.setFont(f2)
     p.setPen(QColor("#93c5fd"))
@@ -627,13 +653,20 @@ def _make_app_icon() -> QIcon:
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.current_file: str | None = None
-        self.is_modified = False
-        self._find_dialog: FindReplaceDialog | None = None
         self._dark_mode = False
-        self._saving = False
+        self._tabs: list[TabData] = []
+        self._default_splitter_state: bytes | None = None
+
+        # Single shared file watcher for all tabs — avoids PyQt6 lambda GC issues
         self._watcher = QFileSystemWatcher()
         self._watcher.fileChanged.connect(self._on_file_changed_externally)
+
+        # Poll timer: checks current tab's mtime every 2s as a reliable fallback
+        # (handles atomic-rename saves from vim etc. where watcher may miss the event)
+        self._poll_timer = QTimer()
+        self._poll_timer.setInterval(2000)
+        self._poll_timer.timeout.connect(self._poll_current_tab)
+        self._poll_timer.start()
 
         self.settings = QSettings(ORG_NAME, APP_NAME)
         self._recent_files: list[str] = self.settings.value("recentFiles", []) or []
@@ -650,32 +683,178 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(icon)
         QApplication.instance().setWindowIcon(icon)
 
-        # Debounce timer for live preview
-        self._preview_timer = QTimer()
-        self._preview_timer.setSingleShot(True)
-        self._preview_timer.setInterval(300)
-        self._preview_timer.timeout.connect(self._refresh_preview)
-        self.editor.textChanged.connect(self._on_text_changed)
+    # ---------------------------------------------------------------- Properties
+
+    @property
+    def _current_tab(self) -> TabData:
+        idx = self._tab_widget.currentIndex()
+        if 0 <= idx < len(self._tabs):
+            return self._tabs[idx]
+        return self._tabs[0]
+
+    @property
+    def editor(self) -> EditorPane:
+        return self._current_tab.editor
+
+    @property
+    def preview(self) -> PreviewPane:
+        return self._current_tab.preview
+
+    @property
+    def splitter(self) -> QSplitter:
+        return self._current_tab.splitter
+
+    @property
+    def current_file(self) -> "str | None":
+        return self._current_tab.file_path
+
+    @current_file.setter
+    def current_file(self, v: "str | None"):
+        self._current_tab.file_path = v
+
+    @property
+    def is_modified(self) -> bool:
+        return self._current_tab.is_modified
+
+    @is_modified.setter
+    def is_modified(self, v: bool):
+        self._current_tab.is_modified = v
+
+    @property
+    def _saving(self) -> bool:
+        return self._current_tab.saving
+
+    @_saving.setter
+    def _saving(self, v: bool):
+        self._current_tab.saving = v
+
+    @property
+    def _saved_preview_size(self) -> "int | None":
+        return self._current_tab.saved_preview_size
+
+    @_saved_preview_size.setter
+    def _saved_preview_size(self, v):
+        self._current_tab.saved_preview_size = v
 
     # ------------------------------------------------------------------ UI
 
     def _build_ui(self):
-        central = QWidget()
-        self.setCentralWidget(central)
-        hbox = QHBoxLayout(central)
-        hbox.setContentsMargins(0, 0, 0, 0)
-        hbox.setSpacing(0)
+        self._tab_widget = QTabWidget()
+        self._tab_widget.setTabsClosable(True)
+        self._tab_widget.setMovable(True)
+        self._tab_widget.tabCloseRequested.connect(self._close_tab)
+        self._tab_widget.currentChanged.connect(self._on_tab_changed)
+        self.setCentralWidget(self._tab_widget)
+        self._new_tab()
 
-        self.splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.editor = EditorPane()
-        self.preview = PreviewPane()
+    def _new_tab(self) -> TabData:
+        tab = TabData()
+        tab.preview.set_dark_mode(self._dark_mode)
+        tab.highlighter = MarkdownHighlighter(tab.editor.document(), self._dark_mode)
 
-        self.splitter.addWidget(self.editor)
-        self.splitter.addWidget(self.preview)
-        self.splitter.setStretchFactor(0, 1)
-        self.splitter.setStretchFactor(1, 1)
+        # Apply current word-wrap setting if available
+        if hasattr(self, "word_wrap_action"):
+            mode = (QTextEdit.LineWrapMode.WidgetWidth
+                    if self.word_wrap_action.isChecked()
+                    else QTextEdit.LineWrapMode.NoWrap)
+            tab.editor.setLineWrapMode(mode)
 
-        hbox.addWidget(self.splitter)
+        # Apply saved splitter proportion
+        if self._default_splitter_state:
+            tab.splitter.restoreState(self._default_splitter_state)
+
+        # Connect per-tab signals using lambda captures
+        tab.preview_timer.timeout.connect(lambda: self._refresh_preview_for(tab))
+        tab.editor.textChanged.connect(lambda: self._on_text_changed_for(tab))
+        tab.editor.cursorPositionChanged.connect(self._update_status)
+
+        self._tabs.append(tab)
+        idx = self._tab_widget.addTab(tab.splitter, "Untitled")
+        self._tab_widget.setCurrentIndex(idx)
+        return tab
+
+    def _tab_label(self, tab: TabData) -> str:
+        name = Path(tab.file_path).name if tab.file_path else "Untitled"
+        return name + (" *" if tab.is_modified else "")
+
+    def _update_tab_title(self, tab: TabData | None = None):
+        if tab is None:
+            tab = self._current_tab
+        idx = self._tabs.index(tab)
+        self._tab_widget.setTabText(idx, self._tab_label(tab))
+
+    def _close_tab(self, idx: int):
+        tab = self._tabs[idx]
+
+        if tab.is_modified:
+            self._tab_widget.setCurrentIndex(idx)
+            name = Path(tab.file_path).name if tab.file_path else "Untitled"
+            btn = QMessageBox.question(
+                self, "Unsaved Changes",
+                f"'{name}' has unsaved changes. Save before closing?",
+                QMessageBox.StandardButton.Save |
+                QMessageBox.StandardButton.Discard |
+                QMessageBox.StandardButton.Cancel,
+            )
+            if btn == QMessageBox.StandardButton.Cancel:
+                return
+            if btn == QMessageBox.StandardButton.Save:
+                if not self._save_tab(tab):
+                    return
+
+        # Clean up
+        if tab.file_path and tab.file_path in self._watcher.files():
+            self._watcher.removePath(tab.file_path)
+        if tab.find_dialog:
+            tab.find_dialog.close()
+
+        self._tab_widget.removeTab(idx)
+        self._tabs.pop(idx)
+
+        if not self._tabs:
+            self._new_tab()
+
+    def _on_tab_changed(self, idx: int):
+        if 0 <= idx < len(self._tabs):
+            tab = self._tabs[idx]
+            if tab.file_path and not tab.is_modified:
+                self._check_external_change(tab)
+        self._update_title()
+        self._update_status()
+        self._refresh_preview()
+
+    def _check_external_change(self, tab: TabData):
+        if not tab.file_path or not os.path.exists(tab.file_path):
+            return
+        try:
+            mtime = os.path.getmtime(tab.file_path)
+        except OSError:
+            return
+        if tab.file_mtime is not None and mtime > tab.file_mtime:
+            self._reload_tab_silently(tab)
+
+    def _poll_current_tab(self):
+        """Fallback mtime poll — catches atomic-rename saves that confuse the watcher."""
+        tab = self._current_tab
+        if tab.file_path and not tab.is_modified and not tab.saving:
+            self._check_external_change(tab)
+
+    def _reload_tab_silently(self, tab: TabData):
+        try:
+            text = Path(tab.file_path).read_text(encoding="utf-8")
+            mtime = os.path.getmtime(tab.file_path)
+        except Exception:
+            return
+        tab.editor.blockSignals(True)
+        tab.editor.setPlainText(text)
+        tab.editor.blockSignals(False)
+        tab.file_mtime = mtime
+        tab.is_modified = False
+        self._update_tab_title(tab)
+        if tab is self._current_tab:
+            self._update_title()
+            self._update_status()
+            self._refresh_preview()
 
     def _build_status_bar(self):
         sb = QStatusBar()
@@ -688,7 +867,7 @@ class MainWindow(QMainWindow):
         sb.addWidget(self._status_words)
         sb.addWidget(QLabel(" | "))
         sb.addPermanentWidget(self._status_file)
-        self.editor.cursorPositionChanged.connect(self._update_status)
+        # cursorPositionChanged is connected per-tab in _new_tab
 
     # ---------------------------------------------------------------- Menus
 
@@ -697,8 +876,11 @@ class MainWindow(QMainWindow):
 
         # ---- File ----
         file_menu = mb.addMenu("&File")
-        self._add_action(file_menu, "&New", self.action_new,
-                         QKeySequence("Ctrl+N"))
+        self._add_action(file_menu, "New &Tab", self.action_new,
+                         QKeySequence("Ctrl+T"))
+        self._add_action(file_menu, "&Close Tab", self.action_close_tab,
+                         QKeySequence("Ctrl+W"))
+        file_menu.addSeparator()
         self._add_action(file_menu, "&Open…", self.action_open,
                          QKeySequence("Ctrl+O"))
         self.recent_menu = file_menu.addMenu("Open &Recent")
@@ -782,6 +964,14 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(help_menu, "&About", self.action_about)
 
+        # Tab navigation shortcuts — on macOS, Qt's "Ctrl" = Cmd, so use Meta for Ctrl key
+        if sys.platform == "darwin":
+            QShortcut(QKeySequence("Meta+Tab"), self, lambda: self._cycle_tab(1))
+            QShortcut(QKeySequence("Meta+Shift+Tab"), self, lambda: self._cycle_tab(-1))
+        else:
+            QShortcut(QKeySequence("Ctrl+Tab"), self, lambda: self._cycle_tab(1))
+            QShortcut(QKeySequence("Ctrl+Shift+Tab"), self, lambda: self._cycle_tab(-1))
+
     def _add_action(self, menu, label, slot, shortcut=None):
         act = QAction(label, self)
         if shortcut:
@@ -790,12 +980,19 @@ class MainWindow(QMainWindow):
         menu.addAction(act)
         return act
 
+    def _cycle_tab(self, direction: int):
+        n = self._tab_widget.count()
+        if n < 2:
+            return
+        idx = (self._tab_widget.currentIndex() + direction) % n
+        self._tab_widget.setCurrentIndex(idx)
+
     def _build_toolbar(self):
         tb = self.addToolBar("Main")
         tb.setMovable(False)
         tb.setIconSize(QSize(18, 18))
 
-        for label, slot in [("New", self.action_new), ("Save", self.action_save)]:
+        for label, slot in [("New Tab", self.action_new), ("Save", self.action_save)]:
             act = QAction(label, self)
             act.triggered.connect(slot)
             tb.addAction(act)
@@ -808,7 +1005,7 @@ class MainWindow(QMainWindow):
         self._open_recent_tb_menu = QMenu(self)
         open_btn.setMenu(self._open_recent_tb_menu)
         self._open_tb_btn = open_btn
-        tb.insertWidget(tb.actions()[1], open_btn)  # between New and Save
+        tb.insertWidget(tb.actions()[1], open_btn)  # between New Tab and Save
 
         tb.addSeparator()
 
@@ -886,8 +1083,7 @@ class MainWindow(QMainWindow):
             self.resize(1100, 720)
 
         splitter_state = self.settings.value("splitterState")
-        if splitter_state:
-            self.splitter.restoreState(splitter_state)
+        self._default_splitter_state = splitter_state
 
         dark = self.settings.value("darkMode", False, type=bool)
         self._dark_mode = dark
@@ -895,13 +1091,35 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_toolbar_dark_action"):
             self._toolbar_dark_action.setChecked(dark)
 
-        preview_visible = self.settings.value("previewVisible", True, type=bool)
-        if not preview_visible:
-            self.action_toggle_preview(False)
-
         word_wrap = self.settings.value("wordWrap", True, type=bool)
         self.word_wrap_action.setChecked(word_wrap)
         self.action_toggle_wrap()
+
+        # Restore open tabs
+        open_tabs = self.settings.value("openTabs", []) or []
+        active_file = self.settings.value("activeTabFile", None)
+        valid_paths = [p for p in open_tabs if os.path.exists(p)]
+
+        if valid_paths:
+            # Load first file into the already-created initial empty tab
+            self._load_file(valid_paths[0])
+            for path in valid_paths[1:]:
+                self._new_tab()
+                self._load_file(path)
+            # Restore active tab
+            if active_file:
+                for i, tab in enumerate(self._tabs):
+                    if tab.file_path == active_file:
+                        self._tab_widget.setCurrentIndex(i)
+                        break
+
+        # Apply splitter state to current tab
+        if splitter_state:
+            self.splitter.restoreState(splitter_state)
+
+        preview_visible = self.settings.value("previewVisible", True, type=bool)
+        if not preview_visible:
+            self.action_toggle_preview(False)
 
     def _save_state(self):
         self.settings.setValue("geometry", self.saveGeometry())
@@ -910,6 +1128,10 @@ class MainWindow(QMainWindow):
         self.settings.setValue("recentFiles", self._recent_files)
         self.settings.setValue("previewVisible", self.preview.isVisible())
         self.settings.setValue("wordWrap", self.word_wrap_action.isChecked())
+        open_tabs = [tab.file_path for tab in self._tabs if tab.file_path]
+        self.settings.setValue("openTabs", open_tabs)
+        active = self._current_tab.file_path
+        self.settings.setValue("activeTabFile", active)
 
     def _update_title(self):
         name = Path(self.current_file).name if self.current_file else "Untitled"
@@ -917,6 +1139,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{name}{mod} — {APP_NAME}")
 
     def _update_status(self):
+        if not hasattr(self, "_status_pos"):
+            return
         cursor = self.editor.textCursor()
         line = cursor.blockNumber() + 1
         col = cursor.columnNumber() + 1
@@ -981,8 +1205,7 @@ class MainWindow(QMainWindow):
             self._recent_files.remove(path)
             self._rebuild_recent_menu()
             return
-        if self._check_unsaved():
-            self._load_file(path)
+        self._open_path(path)
 
     def _clear_recent(self):
         self._recent_files.clear()
@@ -990,82 +1213,81 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------ File operations
 
-    def _check_unsaved(self) -> bool:
-        """Return True if safe to proceed (discard or saved)."""
-        if not self.is_modified:
-            return True
-        name = Path(self.current_file).name if self.current_file else "Untitled"
-        btn = QMessageBox.question(
-            self, "Unsaved Changes",
-            f"'{name}' has unsaved changes. Save before continuing?",
-            QMessageBox.StandardButton.Save |
-            QMessageBox.StandardButton.Discard |
-            QMessageBox.StandardButton.Cancel,
-        )
-        if btn == QMessageBox.StandardButton.Save:
-            return self.action_save()
-        elif btn == QMessageBox.StandardButton.Discard:
-            return True
-        return False
+    def _open_path(self, path: str):
+        """Open file, reusing current tab if empty+untitled, else a new tab."""
+        tab = self._current_tab
+        if tab.file_path is None and not tab.is_modified and not tab.editor.toPlainText().strip():
+            self._load_file(path)
+        else:
+            self._new_tab()
+            self._load_file(path)
 
     def _load_file(self, path: str):
         try:
             text = Path(path).read_text(encoding="utf-8")
+            mtime = os.path.getmtime(path)
         except Exception as exc:
             QMessageBox.critical(self, "Open Error", str(exc))
             return
-        self.editor.blockSignals(True)
-        self.editor.setPlainText(text)
-        self.editor.blockSignals(False)
-        # Update file watcher
-        if self._watcher.files():
-            self._watcher.removePaths(self._watcher.files())
+        tab = self._current_tab
+        tab.editor.blockSignals(True)
+        tab.editor.setPlainText(text)
+        tab.editor.blockSignals(False)
+        # Unwatch previous file if not open in any other tab
+        old_path = tab.file_path
+        if old_path and old_path != path:
+            if not any(t.file_path == old_path for t in self._tabs if t is not tab):
+                self._watcher.removePath(old_path)
         self._watcher.addPath(path)
-        self.current_file = path
-        self.is_modified = False
+        tab.file_path = path
+        tab.file_mtime = mtime
+        tab.is_modified = False
         self._add_recent(path)
+        self._update_tab_title(tab)
         self._update_title()
         self._update_status()
         self._refresh_preview()
 
     def action_new(self):
-        if not self._check_unsaved():
-            return
-        if self._watcher.files():
-            self._watcher.removePaths(self._watcher.files())
-        self.editor.clear()
-        self.current_file = None
-        self.is_modified = False
-        self._update_title()
-        self._update_status()
-        self._refresh_preview()
+        self._new_tab()
+
+    def action_close_tab(self):
+        self._close_tab(self._tab_widget.currentIndex())
 
     def action_open(self):
-        if not self._check_unsaved():
-            return
         last_dir = self.settings.value("lastDir", str(Path.home()))
         path, _ = QFileDialog.getOpenFileName(
             self, "Open Markdown File", last_dir,
             "Markdown Files (*.md *.markdown *.txt);;All Files (*)")
         if path:
             self.settings.setValue("lastDir", str(Path(path).parent))
-            self._load_file(path)
+            self._open_path(path)
 
-    def action_save(self) -> bool:
-        if not self.current_file:
+    def _save_tab(self, tab: TabData) -> bool:
+        if not tab.file_path:
+            # Need save-as: switch to this tab first
+            self._tab_widget.setCurrentIndex(self._tabs.index(tab))
             return self.action_save_as()
         try:
-            self._saving = True
-            QTimer.singleShot(500, lambda: setattr(self, "_saving", False))
-            Path(self.current_file).write_text(
-                self.editor.toPlainText(), encoding="utf-8")
-            self.is_modified = False
-            self._update_title()
+            tab.saving = True
+            QTimer.singleShot(500, lambda: setattr(tab, "saving", False))
+            Path(tab.file_path).write_text(tab.editor.toPlainText(), encoding="utf-8")
+            tab.file_mtime = os.path.getmtime(tab.file_path)
+            tab.is_modified = False
+            self._update_tab_title(tab)
+            if tab is self._current_tab:
+                self._update_title()
             return True
         except Exception as exc:
-            self._saving = False
+            tab.saving = False
             QMessageBox.critical(self, "Save Error", str(exc))
             return False
+
+    def action_save(self) -> bool:
+        tab = self._current_tab
+        if not tab.file_path:
+            return self.action_save_as()
+        return self._save_tab(tab)
 
     def action_save_as(self) -> bool:
         last_dir = self.settings.value("lastDir", str(Path.home()))
@@ -1075,8 +1297,8 @@ class MainWindow(QMainWindow):
         if not path:
             return False
         self.settings.setValue("lastDir", str(Path(path).parent))
-        self.current_file = path
-        return self.action_save()
+        self._current_tab.file_path = path
+        return self._save_tab(self._current_tab)
 
     def action_export_html(self):
         last_dir = self.settings.value("lastDir", str(Path.home()))
@@ -1093,10 +1315,26 @@ class MainWindow(QMainWindow):
 
     # -------------------------------------------------- Preview
 
-    def _on_text_changed(self):
-        self.is_modified = True
-        self._update_title()
-        self._preview_timer.start()
+    def _on_text_changed_for(self, tab: TabData):
+        tab.is_modified = True
+        self._update_tab_title(tab)
+        if tab is self._current_tab:
+            self._update_title()
+        tab.preview_timer.start()
+
+    def _on_file_changed_externally(self, path: str):
+        # Re-watch: some editors delete+recreate files on save
+        if path not in self._watcher.files() and os.path.exists(path):
+            self._watcher.addPath(path)
+        # Find which tab owns this path
+        for tab in self._tabs:
+            if tab.file_path == path:
+                if tab.saving or tab.is_modified or not os.path.exists(path):
+                    return
+                if tab is self._current_tab:
+                    self._reload_tab_silently(tab)
+                # Background tabs: reloaded in _check_external_change on switch
+                return
 
     def _render_markdown(self) -> str:
         text = self.editor.toPlainText()
@@ -1111,44 +1349,25 @@ class MainWindow(QMainWindow):
                 pass
             return markdown.markdown(text, extensions=extensions)
         else:
-            # Very basic fallback: escape HTML
             import html as html_lib
             return f"<pre>{html_lib.escape(text)}</pre>"
 
     def _refresh_preview(self):
         self.preview.set_html(self._render_markdown())
 
-    def _on_file_changed_externally(self, path: str):
-        if self._saving:
-            return
-        # Re-watch: on some systems the watcher drops the file after a change
-        if path not in self._watcher.files() and os.path.exists(path):
-            self._watcher.addPath(path)
-        if not os.path.exists(path) or self.is_modified:
-            return
-        try:
-            text = Path(path).read_text(encoding="utf-8")
-        except Exception:
-            return
-        self.editor.blockSignals(True)
-        self.editor.setPlainText(text)
-        self.editor.blockSignals(False)
-        self.is_modified = False
-        self._update_title()
-        self._refresh_preview()
+    def _refresh_preview_for(self, tab: TabData):
+        if tab is self._current_tab:
+            self._refresh_preview()
 
     # ------------------------------------------------- View actions
 
     def action_toggle_preview(self, checked=None):
-        # `checked` is passed by checkable QAction's triggered(bool) signal.
-        # When called without it (e.g. from shortcut via non-checkable path),
-        # derive the desired state from current visibility.
         if checked is None:
             checked = not self.preview.isVisible()
         if checked:
             self.preview.show()
             total = self.splitter.width()
-            saved = getattr(self, "_saved_preview_size", total // 2)
+            saved = self._saved_preview_size or (total // 2)
             self.splitter.setSizes([total - saved, saved])
         else:
             sizes = self.splitter.sizes()
@@ -1159,21 +1378,25 @@ class MainWindow(QMainWindow):
             self._toolbar_preview_action.setChecked(checked)
 
     def action_toggle_wrap(self):
-        if self.word_wrap_action.isChecked():
-            self.editor.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
-        else:
-            self.editor.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        mode = (QTextEdit.LineWrapMode.WidgetWidth
+                if self.word_wrap_action.isChecked()
+                else QTextEdit.LineWrapMode.NoWrap)
+        for tab in self._tabs:
+            tab.editor.setLineWrapMode(mode)
 
     def action_zoom_in(self):
-        self.editor.zoomIn(2)
+        for tab in self._tabs:
+            tab.editor.zoomIn(2)
 
     def action_zoom_out(self):
-        self.editor.zoomOut(2)
+        for tab in self._tabs:
+            tab.editor.zoomOut(2)
 
     def action_zoom_reset(self):
-        font = self.editor.font()
-        font.setPointSize(13)
-        self.editor.setFont(font)
+        for tab in self._tabs:
+            font = tab.editor.font()
+            font.setPointSize(13)
+            tab.editor.setFont(font)
 
     def action_toggle_dark(self):
         self._dark_mode = not self._dark_mode
@@ -1184,7 +1407,13 @@ class MainWindow(QMainWindow):
         self._refresh_preview()
 
     def _apply_theme(self):
-        self.preview.set_dark_mode(self._dark_mode)
+        for tab in self._tabs:
+            tab.preview.set_dark_mode(self._dark_mode)
+            if tab.highlighter:
+                tab.highlighter.set_dark_mode(self._dark_mode)
+            else:
+                tab.highlighter = MarkdownHighlighter(tab.editor.document(), self._dark_mode)
+
         if self._dark_mode:
             palette = QPalette()
             palette.setColor(QPalette.ColorRole.Window, QColor("#1e1e1e"))
@@ -1200,27 +1429,18 @@ class MainWindow(QMainWindow):
         else:
             QApplication.instance().setPalette(QApplication.style().standardPalette())
 
-        # Rebuild highlighter with new theme
-        if hasattr(self, "_highlighter"):
-            self._highlighter.set_dark_mode(self._dark_mode)
-        else:
-            self._highlighter = MarkdownHighlighter(
-                self.editor.document(), self._dark_mode)
-
     # ------------------------------------------------ Format actions
 
     def _wrap_selection(self, before: str, after: str):
         cursor = self.editor.textCursor()
         if cursor.hasSelection():
             text = cursor.selectedText()
-            # Toggle: unwrap if already wrapped, otherwise wrap
             if text.startswith(before) and text.endswith(after) and len(text) > len(before) + len(after):
                 cursor.insertText(text[len(before):-len(after)])
             else:
                 cursor.insertText(f"{before}{text}{after}")
         else:
             cursor.insertText(f"{before}text{after}")
-            # Move cursor back to select placeholder
             pos = cursor.position()
             cursor.setPosition(pos - len(after) - len("text"))
             cursor.setPosition(pos - len(after), QTextCursor.MoveMode.KeepAnchor)
@@ -1264,7 +1484,6 @@ class MainWindow(QMainWindow):
         cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock,
                             QTextCursor.MoveMode.KeepAnchor)
         line = cursor.selectedText()
-        # Strip any existing heading prefix then apply the new one
         stripped = re.sub(r"^#{1,6}\s*", "", line)
         cursor.insertText(f"{prefix}{stripped}")
 
@@ -1279,11 +1498,12 @@ class MainWindow(QMainWindow):
     # -------------------------------------------------- Help / About
 
     def action_find(self):
-        if self._find_dialog is None:
-            self._find_dialog = FindReplaceDialog(self.editor, self)
-        self._find_dialog.show()
-        self._find_dialog.raise_()
-        self._find_dialog.find_edit.setFocus()
+        tab = self._current_tab
+        if tab.find_dialog is None:
+            tab.find_dialog = FindReplaceDialog(tab.editor, self)
+        tab.find_dialog.show()
+        tab.find_dialog.raise_()
+        tab.find_dialog.find_edit.setFocus()
 
     def action_help(self):
         dlg = HelpDialog(self)
@@ -1313,11 +1533,26 @@ class MainWindow(QMainWindow):
     # --------------------------------------------------- Close event
 
     def closeEvent(self, event):
-        if self._check_unsaved():
-            self._save_state()
-            event.accept()
-        else:
-            event.ignore()
+        for i, tab in enumerate(self._tabs):
+            if tab.is_modified:
+                self._tab_widget.setCurrentIndex(i)
+                name = Path(tab.file_path).name if tab.file_path else "Untitled"
+                btn = QMessageBox.question(
+                    self, "Unsaved Changes",
+                    f"'{name}' has unsaved changes. Save before quitting?",
+                    QMessageBox.StandardButton.Save |
+                    QMessageBox.StandardButton.Discard |
+                    QMessageBox.StandardButton.Cancel,
+                )
+                if btn == QMessageBox.StandardButton.Cancel:
+                    event.ignore()
+                    return
+                if btn == QMessageBox.StandardButton.Save:
+                    if not self._save_tab(tab):
+                        event.ignore()
+                        return
+        self._save_state()
+        event.accept()
 
 
 # ---------------------------------------------------------------------------
@@ -1332,11 +1567,10 @@ def main():
 
     window = MainWindow()
 
-    # Open file passed as argument
     if len(sys.argv) > 1:
         path = sys.argv[1]
         if os.path.isfile(path):
-            window._load_file(os.path.abspath(path))
+            window._open_path(os.path.abspath(path))
 
     window.show()
     sys.exit(app.exec())
