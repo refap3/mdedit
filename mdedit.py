@@ -42,7 +42,7 @@ except ImportError:
 
 APP_NAME = "MDEdit"
 ORG_NAME = "MDEdit"
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 MAX_RECENT = 10
 
 
@@ -1215,6 +1215,11 @@ class MainWindow(QMainWindow):
 
     def _open_path(self, path: str):
         """Open file, reusing current tab if empty+untitled, else a new tab."""
+        abs_path = os.path.abspath(path)
+        for i, t in enumerate(self._tabs):
+            if t.file_path and os.path.abspath(t.file_path) == abs_path:
+                self._tab_widget.setCurrentIndex(i)
+                return
         tab = self._current_tab
         if tab.file_path is None and not tab.is_modified and not tab.editor.toPlainText().strip():
             self._load_file(path)
