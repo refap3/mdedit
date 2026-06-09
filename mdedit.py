@@ -42,7 +42,7 @@ except ImportError:
 
 APP_NAME = "MDEdit"
 ORG_NAME = "MDEdit"
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 MAX_RECENT = 10
 
 
@@ -1409,10 +1409,12 @@ class MainWindow(QMainWindow):
     def _apply_theme(self):
         for tab in self._tabs:
             tab.preview.set_dark_mode(self._dark_mode)
+            tab.editor.blockSignals(True)
             if tab.highlighter:
                 tab.highlighter.set_dark_mode(self._dark_mode)
             else:
                 tab.highlighter = MarkdownHighlighter(tab.editor.document(), self._dark_mode)
+            tab.editor.blockSignals(False)
 
         if self._dark_mode:
             palette = QPalette()

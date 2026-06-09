@@ -8,7 +8,7 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 ## Version
 
-Current release: **v1.4.0**
+Current release: **v1.4.1**
 
 ## Features
 
