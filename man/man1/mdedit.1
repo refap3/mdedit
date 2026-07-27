@@ -1,9 +1,19 @@
-.TH MDEDIT 1 "2026-06-09" "mdedit 1.4.1" "User Commands"
+.TH MDEDIT 1 "2026-07-27" "mdedit 1.5.0" "User Commands"
 .SH NAME
 mdedit \- cross-platform Markdown editor with live preview
 .SH SYNOPSIS
 .B mdedit
-.RI [ file.md ]
+.RI [ file.md ...]
+.br
+.B mdedit
+.B \-\-export\-pdf
+.RI [ options ]
+.IR file.md ...
+.br
+.B mdedit
+.B \-\-export\-html
+.RI [ options ]
+.IR file.md ...
 .SH DESCRIPTION
 .B MDEdit
 is a lightweight Markdown editor built with Python and PyQt6.
@@ -16,6 +26,72 @@ It is a single Python file
 with no external UI dependencies beyond PyQt6, PyQt6-WebEngine (optional), the
 .I markdown
 library, and Pygments for syntax highlighting.
+.SH OPTIONS
+.TP
+.B \-\-export\-pdf
+Render the given files to PDF and exit. No window is shown.
+Each written path is printed to standard output.
+.TP
+.B \-\-export\-html
+Same, but writes a standalone HTML document.
+.TP
+.BI \-o " PATH\fR, \fB\-\-output " PATH
+Output file. Only valid with a single input file.
+Mutually exclusive with
+.BR \-\-out\-dir .
+.TP
+.BI \-\-out\-dir " DIR"
+Output directory for batch exports. Created if it does not exist.
+Defaults to each input file's own directory.
+.TP
+.BI \-\-theme " light|dark"
+Colour theme of the exported document. Default
+.BR light ,
+which prints cleanly on paper.
+.TP
+.BI \-\-page\-size " SIZE"
+.BR A4 ", " Letter " or " Legal .
+Default
+.BR A4 .
+PDF only.
+.TP
+.BI \-\-margins " MM"
+Page margins in millimetres. Default 15. PDF only.
+.TP
+.B \-\-landscape
+Landscape page orientation. PDF only.
+.TP
+.BR \-v ", " \-\-version
+Print the version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print usage and exit.
+.PP
+A file name of
+.B \-
+reads Markdown from standard input; it is only valid in export mode.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+One or more files could not be exported.
+.TP
+.B 2
+Invalid arguments.
+.SH EXAMPLES
+.RS
+mdedit notes.md
+.br
+mdedit \-\-export\-pdf notes.md
+.br
+mdedit \-\-export\-pdf notes.md \-o /tmp/out.pdf
+.br
+mdedit \-\-export\-pdf *.md \-\-out\-dir ~/pdfs \-\-page\-size Letter
+.br
+cat notes.md | mdedit \-\-export\-pdf \- \-o out.pdf
+.RE
 .SH INSTALL
 .B One-line install (macOS/Linux):
 .PP
@@ -94,10 +170,19 @@ Re-applying a format to selected text toggles it off.
 Tables, fenced code blocks, table of contents, syntax-highlighted code blocks via Pygments.
 .TP
 .B File operations
-New Tab, Open, Save, Save As, Export to HTML.
+New Tab, Open, Save, Save As, Export to HTML, Export to PDF.
 The toolbar Open button is a split button: click to open a file dialog,
 click the arrow to pick from the last 10 recent files.
 Full Open Recent submenu also in the File menu.
+.TP
+.B PDF export
+.B File > Export PDF...
+renders the current document to PDF via WebEngine, so the result matches the
+preview. The PDF is always rendered in the light theme regardless of the editor
+theme. Without PyQt6-WebEngine the export falls back to Qt's QTextDocument
+renderer, which supports less CSS.
+The same export is available headlessly with
+.BR \-\-export\-pdf .
 .TP
 .B Persistent state
 Window size, splitter position, dark/light mode, preview visibility, word wrap, recent files,

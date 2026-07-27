@@ -8,7 +8,7 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 ## Version
 
-Current release: **v1.4.1**
+Current release: **v1.5.0**
 
 ## Features
 
@@ -18,14 +18,49 @@ Current release: **v1.4.1**
 - **GitHub-style CSS** — clean preview with dark/light mode support
 - **Syntax highlighting** in the editor — headings, bold, italic, strikethrough, code, links, lists
 - **Auto-reload** — detects external file changes and silently reloads (watcher + 2 s mtime poll); skips reload if you have unsaved edits; also checks on tab switch
-- **File operations** — New Tab, Open (split toolbar button with Recent Files dropdown), Save, Save As, Export HTML, Open Recent (last 10, shortened paths)
+- **File operations** — New Tab, Open (split toolbar button with Recent Files dropdown), Save, Save As, Export HTML, Export PDF, Open Recent (last 10, shortened paths)
 - **Find & Replace** — per-tab dialog; case-sensitive and whole-word options, live match count, highlighted current match
 - **Format helpers** — Bold, Italic, Inline Code, Code Block, Link, Image, Table, HR (re-applying a format toggles it off)
 - **Markdown extensions** — tables, fenced code blocks, TOC, syntax-highlighted code (Pygments)
 - **Persistent state** — window size, splitter position, dark mode, preview visibility, word wrap, recent files, open tabs
 - **Toolbar Help menu** — Markdown Reference, Keyboard Shortcuts, and About accessible from a single toolbar dropdown
 - **Custom app icon** — programmatic blue gradient icon, shown in window title bar and dock/taskbar
-- **Command-line** — open a file directly: `python3 mdedit.py file.md`
+- **PDF export** — File › Export PDF… renders the preview to PDF (always light theme, so it prints cleanly)
+- **Command-line** — open files, or export to PDF/HTML headlessly (see [Command line](#command-line))
+
+## Command line
+
+```
+mdedit [OPTIONS] [FILE...]
+```
+
+| Command | Result |
+|---|---|
+| `mdedit` | Open the editor, restoring the last session |
+| `mdedit notes.md` | Open `notes.md` in the editor |
+| `mdedit --export-pdf notes.md` | Write `notes.pdf` next to the source, then exit |
+| `mdedit --export-pdf notes.md -o /tmp/out.pdf` | Explicit output path |
+| `mdedit --export-pdf *.md --out-dir ~/pdfs` | Batch export into a directory |
+| `cat notes.md \| mdedit --export-pdf - -o out.pdf` | Read Markdown from stdin |
+| `mdedit --export-html notes.md` | Same, but writes HTML |
+
+| Option | Description |
+|---|---|
+| `-o`, `--output PATH` | Output file (single input only; conflicts with `--out-dir`) |
+| `--out-dir DIR` | Output directory for batch exports (created if missing) |
+| `--theme light\|dark` | Export colour theme (default: `light`) |
+| `--page-size SIZE` | `A4`, `Letter` or `Legal` (default: `A4`) |
+| `--margins MM` | Page margins in millimetres (default: `15`) |
+| `--landscape` | Landscape orientation |
+| `-v`, `--version` | Print version |
+| `-h`, `--help` | Show help |
+
+Export runs headless — no window is shown. Each written path is printed to stdout.
+Exit codes: `0` success, `1` a file failed, `2` bad arguments.
+
+PDF rendering uses WebEngine, so the output matches the preview. Without
+PyQt6-WebEngine installed it falls back to Qt's `QTextDocument` renderer, which
+supports a smaller subset of CSS.
 
 ## Screenshots
 

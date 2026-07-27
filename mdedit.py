@@ -3,6 +3,7 @@
 MDEdit — A cross-platform Markdown editor built with PyQt6.
 """
 
+import argparse
 import re
 import sys
 import os
@@ -14,11 +15,12 @@ os.environ.setdefault("QT_LOGGING_RULES", "*.debug=false;qt.webenginecontext.inf
 
 from PyQt6.QtCore import (
     Qt, QTimer, QSettings, QSize, QPoint, QRect, QFileSystemWatcher,
+    QMarginsF, QUrl,
 )
 from PyQt6.QtGui import (
     QAction, QColor, QFont, QIcon, QKeySequence, QLinearGradient, QPainter,
-    QPalette, QPixmap, QShortcut, QSyntaxHighlighter, QTextCharFormat,
-    QTextCursor, QTextDocument,
+    QPageLayout, QPageSize, QPalette, QPixmap, QShortcut, QSyntaxHighlighter,
+    QTextCharFormat, QTextCursor, QTextDocument,
 )
 from PyQt6.QtWidgets import (
     QApplication, QDialog, QFileDialog, QHBoxLayout,
@@ -42,7 +44,7 @@ except ImportError:
 
 APP_NAME = "MDEdit"
 ORG_NAME = "MDEdit"
-VERSION = "1.4.2"
+VERSION = "1.5.0"
 MAX_RECENT = 10
 
 
@@ -188,14 +190,16 @@ class PreviewPane(QWidget):
         self._dark_mode = dark
 
     def set_html(self, html: str):
-        full = self._wrap(html)
+        full = self._wrap(html, self._dark_mode)
         if self._use_web:
             self._view.setHtml(full)
         else:
             self._view.setHtml(full)
 
-    def _wrap(self, body: str) -> str:
-        if self._dark_mode:
+    @staticmethod
+    def _wrap(body: str, dark: bool = False) -> str:
+        """Wrap rendered HTML in a full document. Callable without an instance."""
+        if dark:
             bg, fg, code_bg, border = "#1e1e1e", "#d4d4d4", "#2d2d2d", "#3e3e3e"
             link = "#4ec9b0"
         else:
@@ -248,7 +252,7 @@ class PreviewPane(QWidget):
         blockquote {{
             margin: 0;
             padding: 0 1em;
-            color: {"#8b8b8b" if self._dark_mode else "#57606a"};
+            color: {"#8b8b8b" if dark else "#57606a"};
             border-left: 4px solid {border};
         }}
         table {{
@@ -262,7 +266,7 @@ class PreviewPane(QWidget):
             text-align: left;
         }}
         th {{ background: {code_bg}; font-weight: 600; }}
-        tr:nth-child(even) {{ background: {"#252525" if self._dark_mode else "#f6f8fa"}; }}
+        tr:nth-child(even) {{ background: {"#252525" if dark else "#f6f8fa"}; }}
         img {{ max-width: 100%; }}
         hr {{ border: none; border-top: 1px solid {border}; margin: 1.5em 0; }}
         ul, ol {{ padding-left: 2em; }}
@@ -279,6 +283,112 @@ class PreviewPane(QWidget):
 {body}
 </body>
 </html>"""
+
+
+# ---------------------------------------------------------------------------
+# Markdown rendering / PDF export
+# ---------------------------------------------------------------------------
+
+MD_EXTENSIONS = ["tables", "fenced_code", "toc", "nl2br", "sane_lists", "codehilite"]
+
+PAGE_SIZES = {
+    "a4": QPageSize.PageSizeId.A4,
+    "letter": QPageSize.PageSizeId.Letter,
+    "legal": QPageSize.PageSizeId.Legal,
+}
+
+# Exporters are async (WebEngine); keep references so they are not garbage
+# collected while the PDF is still being written.
+_pdf_jobs = []
+
+
+def render_markdown_text(text: str) -> str:
+    """Markdown source -> HTML body fragment."""
+    if HAS_MARKDOWN:
+        return markdown.markdown(text, extensions=MD_EXTENSIONS)
+    import html as html_lib
+    return f"<pre>{html_lib.escape(text)}</pre>"
+
+
+def make_page_layout(page_size="A4", margins_mm=15.0, landscape=False) -> QPageLayout:
+    size_id = PAGE_SIZES.get(str(page_size).lower())
+    if size_id is None:
+        raise ValueError(f"unknown page size: {page_size} "
+                         f"(expected one of: {', '.join(sorted(PAGE_SIZES))})")
+    orientation = (QPageLayout.Orientation.Landscape if landscape
+                   else QPageLayout.Orientation.Portrait)
+    return QPageLayout(
+        QPageSize(size_id), orientation,
+        QMarginsF(margins_mm, margins_mm, margins_mm, margins_mm),
+        QPageLayout.Unit.Millimeter,
+    )
+
+
+def html_to_pdf(html: str, out_path: str, layout: QPageLayout,
+                base_dir: "str | None" = None, callback=None):
+    """Write a full HTML document to a PDF file.
+
+    Uses WebEngine when available (matches the preview exactly), otherwise
+    falls back to QTextDocument, which renders a reduced subset of CSS.
+    `callback(success: bool, error: str)` is invoked when the file is written.
+    """
+    def done(ok, err=""):
+        if callback:
+            callback(ok, err)
+
+    if not HAS_WEBENGINE:
+        try:
+            from PyQt6.QtPrintSupport import QPrinter
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+            printer.setOutputFileName(out_path)
+            printer.setPageLayout(layout)
+            doc = QTextDocument()
+            if base_dir:
+                doc.setBaseUrl(QUrl.fromLocalFile(os.path.join(base_dir, "")))
+            doc.setHtml(html)
+            doc.print(printer)
+            done(True)
+        except Exception as exc:
+            done(False, str(exc))
+        return
+
+    from PyQt6.QtWebEngineCore import QWebEnginePage
+
+    page = QWebEnginePage()
+    _pdf_jobs.append(page)
+
+    def finish(ok, err=""):
+        if page in _pdf_jobs:
+            _pdf_jobs.remove(page)
+        done(ok, err)
+
+    def on_printed(path, ok):
+        finish(bool(ok), "" if ok else f"WebEngine could not write {path}")
+
+    def on_loaded(ok):
+        if not ok:
+            finish(False, "failed to render HTML")
+            return
+        # Small delay so web fonts and Pygments styles settle before printing.
+        QTimer.singleShot(150, lambda: page.printToPdf(out_path, layout))
+
+    page.pdfPrintingFinished.connect(on_printed)
+    page.loadFinished.connect(on_loaded)
+    base = QUrl.fromLocalFile(os.path.join(base_dir, "")) if base_dir else QUrl()
+    page.setHtml(html, base)
+
+
+def markdown_file_to_pdf(md_path: str, out_path: str, layout: QPageLayout,
+                         dark=False, callback=None):
+    """Read a Markdown file (or '-' for stdin) and export it as PDF."""
+    if md_path == "-":
+        text, base_dir = sys.stdin.read(), os.getcwd()
+    else:
+        text = Path(md_path).read_text(encoding="utf-8")
+        base_dir = str(Path(md_path).resolve().parent)
+    html = PreviewPane._wrap(render_markdown_text(text), dark)
+    html_to_pdf(html, out_path, layout, base_dir=base_dir, callback=callback)
 
 
 # ---------------------------------------------------------------------------
@@ -892,6 +1002,7 @@ class MainWindow(QMainWindow):
                          QKeySequence("Ctrl+Shift+S"))
         file_menu.addSeparator()
         self._add_action(file_menu, "Export &HTML…", self.action_export_html)
+        self._add_action(file_menu, "Export &PDF…", self.action_export_pdf)
         file_menu.addSeparator()
         self._add_action(file_menu, "&Quit", self.close,
                          QKeySequence("Ctrl+Q"))
@@ -1312,9 +1423,43 @@ class MainWindow(QMainWindow):
         if not path:
             return
         html_body = self._render_markdown()
-        full_html = self.preview._wrap(html_body)
+        full_html = self.preview._wrap(html_body, self._dark_mode)
         try:
             Path(path).write_text(full_html, encoding="utf-8")
+        except Exception as exc:
+            QMessageBox.critical(self, "Export Error", str(exc))
+
+    def action_export_pdf(self):
+        current = self._current_tab.file_path
+        if current:
+            default = str(Path(current).with_suffix(".pdf"))
+        else:
+            last_dir = self.settings.value("lastDir", str(Path.home()))
+            default = str(Path(last_dir) / "Untitled.pdf")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export PDF", default, "PDF Files (*.pdf);;All Files (*)")
+        if not path:
+            return
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+        self.settings.setValue("lastDir", str(Path(path).parent))
+
+        # PDFs are always rendered light — dark backgrounds waste ink on paper.
+        full_html = self.preview._wrap(self._render_markdown(), False)
+        base_dir = str(Path(current).resolve().parent) if current else os.getcwd()
+        self.statusBar().showMessage(f"Exporting {Path(path).name}…")
+
+        def done(ok, err):
+            if ok:
+                self.statusBar().showMessage(f"Exported {Path(path).name}", 4000)
+            else:
+                self.statusBar().clearMessage()
+                QMessageBox.critical(self, "Export Error",
+                                     err or "PDF export failed.")
+
+        try:
+            html_to_pdf(full_html, path, make_page_layout(),
+                        base_dir=base_dir, callback=done)
         except Exception as exc:
             QMessageBox.critical(self, "Export Error", str(exc))
 
@@ -1342,20 +1487,7 @@ class MainWindow(QMainWindow):
                 return
 
     def _render_markdown(self) -> str:
-        text = self.editor.toPlainText()
-        if HAS_MARKDOWN:
-            extensions = [
-                "tables", "fenced_code", "toc",
-                "nl2br", "sane_lists",
-            ]
-            try:
-                extensions.append("codehilite")
-            except Exception:
-                pass
-            return markdown.markdown(text, extensions=extensions)
-        else:
-            import html as html_lib
-            return f"<pre>{html_lib.escape(text)}</pre>"
+        return render_markdown_text(self.editor.toPlainText())
 
     def _refresh_preview(self):
         self.preview.set_html(self._render_markdown())
@@ -1566,19 +1698,151 @@ class MainWindow(QMainWindow):
 # Entry point
 # ---------------------------------------------------------------------------
 
+EPILOG = """\
+examples:
+  mdedit                                open the editor (restores last session)
+  mdedit notes.md                       open a file in the editor
+  mdedit --export-pdf notes.md          write notes.pdf next to the source
+  mdedit --export-pdf notes.md -o /tmp/out.pdf
+  mdedit --export-pdf *.md --out-dir ~/pdfs
+  cat notes.md | mdedit --export-pdf - -o out.pdf
+"""
+
+
+def _build_arg_parser() -> "argparse.ArgumentParser":
+    p = argparse.ArgumentParser(
+        prog="mdedit",
+        description="Markdown editor with live preview, and headless HTML/PDF export.",
+        epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("files", nargs="*", metavar="FILE",
+                   help="Markdown file(s); '-' reads stdin (export only)")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--export-pdf", action="store_true",
+                      help="export FILE(s) to PDF and exit (no window)")
+    mode.add_argument("--export-html", action="store_true",
+                      help="export FILE(s) to HTML and exit (no window)")
+    p.add_argument("-o", "--output", metavar="PATH",
+                   help="output file (single input only)")
+    p.add_argument("--out-dir", metavar="DIR",
+                   help="output directory (defaults to each input's directory)")
+    p.add_argument("--theme", choices=["light", "dark"], default="light",
+                   help="export colour theme (default: light)")
+    p.add_argument("--page-size", default="A4", metavar="SIZE",
+                   help="A4, Letter or Legal (default: A4)")
+    p.add_argument("--margins", type=float, default=15.0, metavar="MM",
+                   help="page margins in millimetres (default: 15)")
+    p.add_argument("--landscape", action="store_true",
+                   help="landscape page orientation")
+    p.add_argument("-v", "--version", action="version",
+                   version=f"{APP_NAME} {VERSION}")
+    return p
+
+
+def _resolve_output(src: str, args, suffix: str) -> str:
+    if args.output:
+        return os.path.abspath(args.output)
+    stem = "stdin" if src == "-" else Path(src).stem
+    out_dir = args.out_dir or ("." if src == "-" else str(Path(src).resolve().parent))
+    return str(Path(out_dir).resolve() / f"{stem}{suffix}")
+
+
+def _run_export(app, args) -> int:
+    """Headless export. Returns a process exit code."""
+    dark = args.theme == "dark"
+
+    for src in args.files:
+        if src != "-" and not os.path.isfile(src):
+            print(f"mdedit: no such file: {src}", file=sys.stderr)
+            return 1
+    if args.out_dir:
+        os.makedirs(args.out_dir, exist_ok=True)
+
+    if args.export_html:
+        failed = 0
+        for src in args.files:
+            out = _resolve_output(src, args, ".html")
+            try:
+                text = sys.stdin.read() if src == "-" else Path(src).read_text(encoding="utf-8")
+                html = PreviewPane._wrap(render_markdown_text(text), dark)
+                Path(out).write_text(html, encoding="utf-8")
+                print(out)
+            except Exception as exc:
+                print(f"mdedit: {src}: {exc}", file=sys.stderr)
+                failed = 1
+        return failed
+
+    try:
+        layout = make_page_layout(args.page_size, args.margins, args.landscape)
+    except ValueError as exc:
+        print(f"mdedit: {exc}", file=sys.stderr)
+        return 2
+
+    queue = list(args.files)
+    state = {"code": 0}
+
+    def next_file():
+        if not queue:
+            app.quit()
+            return
+        src = queue.pop(0)
+        out = _resolve_output(src, args, ".pdf")
+
+        def done(ok, err):
+            if ok:
+                print(out)
+            else:
+                print(f"mdedit: {src}: {err}", file=sys.stderr)
+                state["code"] = 1
+            next_file()
+
+        try:
+            markdown_file_to_pdf(src, out, layout, dark=dark, callback=done)
+        except Exception as exc:
+            print(f"mdedit: {src}: {exc}", file=sys.stderr)
+            state["code"] = 1
+            QTimer.singleShot(0, next_file)
+
+    QTimer.singleShot(0, next_file)
+    app.exec()
+    return state["code"]
+
+
 def main():
-    app = QApplication(sys.argv)
+    args = _build_arg_parser().parse_args(
+        [a for a in sys.argv[1:] if not a.startswith("-psn_")])  # macOS .app arg
+
+    exporting = args.export_pdf or args.export_html
+    if exporting and not args.files:
+        print("mdedit: --export-pdf/--export-html needs at least one FILE",
+              file=sys.stderr)
+        sys.exit(2)
+    if args.output and len(args.files) > 1:
+        print("mdedit: -o/--output takes a single input file; use --out-dir",
+              file=sys.stderr)
+        sys.exit(2)
+    if args.output and args.out_dir:
+        print("mdedit: -o/--output and --out-dir are mutually exclusive",
+              file=sys.stderr)
+        sys.exit(2)
+    if not exporting and "-" in args.files:
+        print("mdedit: '-' (stdin) is only supported with --export-pdf/--export-html",
+              file=sys.stderr)
+        sys.exit(2)
+
+    app = QApplication(sys.argv[:1])
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(ORG_NAME)
     app.setStyle("Fusion")
 
-    window = MainWindow()
+    if exporting:
+        sys.exit(_run_export(app, args))
 
-    if len(sys.argv) > 1:
-        path = sys.argv[1]
+    window = MainWindow()
+    for path in args.files:
         if os.path.isfile(path):
             window._open_path(os.path.abspath(path))
-
     window.show()
     sys.exit(app.exec())
 
