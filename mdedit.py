@@ -44,7 +44,7 @@ except ImportError:
 
 APP_NAME = "MDEdit"
 ORG_NAME = "MDEdit"
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 MAX_RECENT = 10
 
 
@@ -166,6 +166,22 @@ class EditorPane(QTextEdit):
 # Preview Pane
 # ---------------------------------------------------------------------------
 
+_pygments_css_cache = {}
+
+
+def pygments_css(dark: bool = False) -> str:
+    """Syntax-colour rules for codehilite blocks. Empty if Pygments is missing."""
+    if dark not in _pygments_css_cache:
+        try:
+            from pygments.formatters import HtmlFormatter
+            style = "monokai" if dark else "default"
+            css = HtmlFormatter(style=style).get_style_defs(".codehilite")
+        except Exception:
+            css = ""
+        _pygments_css_cache[dark] = css
+    return _pygments_css_cache[dark]
+
+
 class PreviewPane(QWidget):
     """HTML preview, using QWebEngineView when available."""
 
@@ -271,6 +287,14 @@ class PreviewPane(QWidget):
         hr {{ border: none; border-top: 1px solid {border}; margin: 1.5em 0; }}
         ul, ol {{ padding-left: 2em; }}
         li {{ margin: 0.25em 0; }}
+        .codehilite {{
+            background: {code_bg};
+            border: 1px solid {border};
+            border-radius: 6px;
+            margin: 1em 0;
+        }}
+        .codehilite pre {{ background: transparent; border: none; margin: 0; }}
+        {pygments_css(dark)}
         """
 
         return f"""<!DOCTYPE html>

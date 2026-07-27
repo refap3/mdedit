@@ -8,7 +8,7 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 ## Version
 
-Current release: **v1.5.0**
+Current release: **v1.5.1**
 
 ## Features
 
@@ -21,7 +21,7 @@ Current release: **v1.5.0**
 - **File operations** — New Tab, Open (split toolbar button with Recent Files dropdown), Save, Save As, Export HTML, Export PDF, Open Recent (last 10, shortened paths)
 - **Find & Replace** — per-tab dialog; case-sensitive and whole-word options, live match count, highlighted current match
 - **Format helpers** — Bold, Italic, Inline Code, Code Block, Link, Image, Table, HR (re-applying a format toggles it off)
-- **Markdown extensions** — tables, fenced code blocks, TOC, syntax-highlighted code (Pygments)
+- **Markdown extensions** — tables, fenced code blocks, TOC, syntax-highlighted code (Pygments — colours carry through to HTML and PDF export)
 - **Persistent state** — window size, splitter position, dark mode, preview visibility, word wrap, recent files, open tabs
 - **Toolbar Help menu** — Markdown Reference, Keyboard Shortcuts, and About accessible from a single toolbar dropdown
 - **Custom app icon** — programmatic blue gradient icon, shown in window title bar and dock/taskbar
