@@ -8,7 +8,7 @@ A lightweight, cross-platform Markdown editor built with Python and PyQt6.
 
 ## Version
 
-Current release: **v1.5.1**
+Current release: **v1.5.2**
 
 ## Features
 
@@ -25,7 +25,7 @@ Current release: **v1.5.1**
 - **Persistent state** — window size, splitter position, dark mode, preview visibility, word wrap, recent files, open tabs
 - **Toolbar Help menu** — Markdown Reference, Keyboard Shortcuts, and About accessible from a single toolbar dropdown
 - **Custom app icon** — programmatic blue gradient icon, shown in window title bar and dock/taskbar
-- **PDF export** — File › Export PDF… renders the preview to PDF (always light theme, so it prints cleanly)
+- **PDF export** — File › Export PDF… or the toolbar **PDF** button renders the preview to PDF (always light theme, so it prints cleanly)
 - **Command-line** — open files, or export to PDF/HTML headlessly (see [Command line](#command-line))
 
 ## Command line

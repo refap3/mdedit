@@ -2,7 +2,7 @@
 ; Run: iscc installer.iss
 
 #define AppName    "MDEdit"
-#define AppVersion "1.5.1"
+#define AppVersion "1.5.2"
 #define AppExe     "MDEdit.exe"
 #define AppURL     "https://github.com/refap3/mdedit"
 

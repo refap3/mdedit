@@ -51,15 +51,15 @@ app = BUNDLE(
     name="MDEdit.app",
     icon=None,           # replace with "mdedit.icns" once you have an icon
     bundle_identifier="com.mdedit.app",
-    version="1.5.1",
+    version="1.5.2",
     info_plist={
         "NSPrincipalClass": "NSApplication",
         "NSAppleScriptEnabled": False,
         "NSHighResolutionCapable": True,
         "CFBundleDisplayName": "MDEdit",
         "CFBundleName": "MDEdit",
-        "CFBundleVersion": "1.5.1",
-        "CFBundleShortVersionString": "1.5.1",
+        "CFBundleVersion": "1.5.2",
+        "CFBundleShortVersionString": "1.5.2",
         "LSMinimumSystemVersion": "10.13",
         "CFBundleDocumentTypes": [
             {

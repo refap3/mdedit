@@ -44,7 +44,7 @@ except ImportError:
 
 APP_NAME = "MDEdit"
 ORG_NAME = "MDEdit"
-VERSION = "1.5.1"
+VERSION = "1.5.2"
 MAX_RECENT = 10
 
 
@@ -1127,8 +1127,13 @@ class MainWindow(QMainWindow):
         tb.setMovable(False)
         tb.setIconSize(QSize(18, 18))
 
-        for label, slot in [("New Tab", self.action_new), ("Save", self.action_save)]:
+        for label, tip, slot in [
+            ("New Tab", "New tab", self.action_new),
+            ("Save",    "Save",    self.action_save),
+            ("PDF",     "Export PDF…", self.action_export_pdf),
+        ]:
             act = QAction(label, self)
+            act.setToolTip(tip)
             act.triggered.connect(slot)
             tb.addAction(act)
 

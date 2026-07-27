@@ -1,4 +1,4 @@
-.TH MDEDIT 1 "2026-07-27" "mdedit 1.5.1" "User Commands"
+.TH MDEDIT 1 "2026-07-27" "mdedit 1.5.2" "User Commands"
 .SH NAME
 mdedit \- cross-platform Markdown editor with live preview
 .SH SYNOPSIS
@@ -179,7 +179,9 @@ Full Open Recent submenu also in the File menu.
 .TP
 .B PDF export
 .B File > Export PDF...
-renders the current document to PDF via WebEngine, so the result matches the
+or the toolbar
+.B PDF
+button renders the current document to PDF via WebEngine, so the result matches the
 preview. The PDF is always rendered in the light theme regardless of the editor
 theme. Without PyQt6-WebEngine the export falls back to Qt's QTextDocument
 renderer, which supports less CSS.
